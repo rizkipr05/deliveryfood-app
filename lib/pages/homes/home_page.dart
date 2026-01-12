@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/app_services.dart';
 import '../../services/api_client.dart';
+import '../promo/promo_page.dart';
 import '../profile/profile_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -133,7 +134,7 @@ class _HomePageState extends State<HomePage> {
         index: bottomIndex,
         children: [
           _homeTab(context),
-          const _PlaceholderTab(title: "Explore"),
+          const PromoPage(),
           const _PlaceholderTab(title: "Order"),
           const ProfilePage(),
         ],
@@ -162,7 +163,7 @@ class _HomePageState extends State<HomePage> {
             onChanged: (v) => _onSearchChanged(v),
           ),
           const SizedBox(height: 12),
-          _PromoBanner(onTap: () {}),
+          _PromoBanner(onTap: () => setState(() => bottomIndex = 1)),
           const SizedBox(height: 12),
           const _SectionTitle(title: "Kategori"),
           const SizedBox(height: 8),
@@ -648,7 +649,7 @@ class _BottomItem extends StatelessWidget {
         height: double.infinity,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: active ? kOrange.withOpacity(0.12) : Colors.transparent,
+          color: active ? kOrange.withValues(alpha: 0.12) : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
         ),
         child: Column(

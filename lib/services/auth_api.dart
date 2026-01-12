@@ -41,6 +41,13 @@ class AuthApi {
     return Map<String, dynamic>.from(data["user"] as Map);
   }
 
+  Future<void> logout(String token) async {
+    await client.post(
+      "/api/auth2/logout",
+      headers: {"Authorization": "Bearer $token"},
+    );
+  }
+
   Future<ForgotPasswordResult> forgotPassword(String email) async {
     final data = await client.post("/api/auth/forgot-password", body: {"email": email});
 

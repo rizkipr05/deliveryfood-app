@@ -47,6 +47,13 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _logout() async {
+    final token = await AppServices.tokenStore.getToken();
+    if (token != null && token.isNotEmpty) {
+      try {
+        await AppServices.authApi.logout(token);
+      } catch (_) {}
+    }
+
     await AppServices.tokenStore.clear();
     if (!mounted) return;
 
