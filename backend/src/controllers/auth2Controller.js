@@ -101,8 +101,16 @@ async function me(req, res) {
 }
 
 async function logout(req, res) {
-  // Since we're using stateless JWTs, logout can be handled on the client side by simply deleting the token.
-  return res.json({ message: "Logout berhasil" });
+  const db = openDb();
+  try {
+    await run(db, `DELETE FROM user_sessions WHERE user_id = ?`, [req.user.id]);
+    return res.json({ message: "Logout berhasil" });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ message: "Server error" });
+  } finally {
+    db.close();
+  }
 }
 
 module.exports = { register, login, logout, me };
