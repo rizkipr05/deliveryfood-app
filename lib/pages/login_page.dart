@@ -18,7 +18,7 @@ class _LoginPageState extends State<LoginPage>
   bool remember = false;
   bool obscure = true;
 
-  final emailC = TextEditingController(text: "adrian123@gmail.com");
+  final emailC = TextEditingController();
   final passC = TextEditingController();
 
   @override

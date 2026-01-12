@@ -18,8 +18,8 @@ class _RegisterPageState extends State<RegisterPage>
 
   late final TabController _tab;
 
-  final nameC = TextEditingController(text: "Adrian");
-  final emailC = TextEditingController(text: "adrian123@gmail.com");
+  final nameC = TextEditingController();
+  final emailC = TextEditingController();
   final phoneC = TextEditingController(text: "(+62) 5623 9007 876");
   final passC = TextEditingController();
 
