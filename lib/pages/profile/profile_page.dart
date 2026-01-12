@@ -4,6 +4,7 @@ import 'package:flutter_app/services/app_services.dart';
 import 'edit_profile_page.dart';
 import 'address_page.dart';
 import 'account_page.dart';
+import '../login_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -57,11 +58,10 @@ class _ProfilePageState extends State<ProfilePage> {
     await AppServices.tokenStore.clear();
     if (!mounted) return;
 
-    // Karena ProfilePage ini TAB (IndexedStack), kita tidak pop route.
-    // Cukup kembali ke root agar HomePage reload (sesuai flow app kamu).
-    Navigator.of(context).popUntil((r) => r.isFirst);
-
-    // Optional: kalau HomePage kamu butuh refresh user, biasanya akan reload sendiri.
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (route) => false,
+    );
   }
 
   @override
