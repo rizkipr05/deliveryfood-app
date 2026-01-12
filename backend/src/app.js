@@ -7,6 +7,7 @@ const authRoutes = require("./routes/authRoutes");
 const auth2Routes = require("./routes/auth2Routes");
 const productRoutes = require("./routes/productRoutes");
 const ulasanRoutes = require("./routes/ulasanRoutes");
+const promoRoutes = require("./routes/promoRoutes");
 
 const app = express();
 
@@ -20,6 +21,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/auth2", auth2Routes);
 app.use("/api", productRoutes);
 app.use("/api", ulasanRoutes);
+app.use("/api", promoRoutes);
 
 app.use((req, res) => res.status(404).json({ message: "Not Found" }));
 

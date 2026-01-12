@@ -1,8 +1,8 @@
-const express = require('express');
-const { getPromos } = require('../controllers/promoController');
+const express = require("express");
+const { getPromos } = require("../controllers/promoController");
 
-const router = expressRouter();
+const router = express.Router();
 
-router.get('/promos', getPromos);
+router.get("/promos", getPromos);
 
 module.exports = router;

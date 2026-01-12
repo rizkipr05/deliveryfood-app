@@ -6,7 +6,7 @@ const bcrypt = require("bcryptjs");
   const db = openDb();
 
   try {
-    await run(
+        await run(
       db,
       `
       CREATE TABLE IF NOT EXISTS products (
@@ -23,6 +23,18 @@ const bcrypt = require("bcryptjs");
     );
 
     await run(db, `CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);`);
+
+    const columns = await all(db, `PRAGMA table_info(products)`);
+    const hasCol = (name) => columns.some((c) => c.name === name);
+    if (!hasCol("is_promo")) {
+      await run(db, `ALTER TABLE products ADD COLUMN is_promo INTEGER NOT NULL DEFAULT 0`);
+    }
+    if (!hasCol("promo_price")) {
+      await run(db, `ALTER TABLE products ADD COLUMN promo_price INTEGER`);
+    }
+    if (!hasCol("discount_percent")) {
+      await run(db, `ALTER TABLE products ADD COLUMN discount_percent INTEGER`);
+    }
 
     await run(
       db,
@@ -88,7 +100,7 @@ const bcrypt = require("bcryptjs");
         ["Roti Bakar", "Dessert", "Warung Pak Madjid", 25000, 4.9, "rotibakar.png"],
       ];
 
-      for (finalRow of seed) {                                          
+      for (const finalRow of seed) {
         await run(
           db,
           `INSERT INTO products (name, category, store, price, rating, image) VALUES (?,?,?,?,?,?)`,
@@ -96,6 +108,58 @@ const bcrypt = require("bcryptjs");
         );
       }
       console.log("✅ Seed products inserted");
+    }
+
+    // mark some promos
+    await run(
+      db,
+      `
+      UPDATE products
+      SET is_promo = 1,
+          promo_price = CASE
+            WHEN price >= 25000 THEN price - 10000
+            WHEN price >= 15000 THEN price - 5000
+            ELSE price - 2000
+          END,
+          discount_percent = CASE
+            WHEN price > 0 THEN ROUND(((price - (CASE
+              WHEN price >= 25000 THEN price - 10000
+              WHEN price >= 15000 THEN price - 5000
+              ELSE price - 2000
+            END)) * 100.0) / price)
+            ELSE 0
+          END
+      WHERE id IN (1, 3, 5, 8, 10)
+      `
+    );
+
+    await run(
+      db,
+      `
+      CREATE TABLE IF NOT EXISTS promos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        subtitle TEXT NOT NULL,
+        color TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      `
+    );
+
+    const promoCount = await get(db, `SELECT COUNT(*) as c FROM promos`);
+    if ((promoCount?.c ?? 0) === 0) {
+      const promos = [
+        ["Diskon\\n20%", "berlaku\\nhari ini", "#FF8A00"],
+        ["Diskon\\n10%", "untuk\\nsemua", "#1DB954"],
+      ];
+      for (const finalRow of promos) {
+        await run(
+          db,
+          `INSERT INTO promos (title, subtitle, color) VALUES (?,?,?)`,
+          finalRow
+        );
+      }
+      console.log("✅ Seed promos inserted");
     }
 
 

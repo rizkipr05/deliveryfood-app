@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/promo_api.dart';
+import '../homes/product_detail_page.dart';
 
 class PromoPage extends StatefulWidget {
   const PromoPage({super.key});
@@ -155,8 +156,36 @@ class _PromoPageState extends State<PromoPage> {
                                   crossAxisSpacing: 12,
                                   childAspectRatio: 0.75,
                                 ),
-                            itemBuilder: (_, i) =>
-                                _PromoProductCard(p: products[i], onTap: () {}),
+                            itemBuilder: (context, i) => _PromoProductCard(
+                              p: products[i],
+                              onTap: () {
+                                final id = products[i].id;
+                                if (id <= 0) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text("Produk tidak ditemukan.")),
+                                  );
+                                  return;
+                                }
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ProductDetailPage(
+                                      productId: id,
+                                      initialData: {
+                                        "id": id,
+                                        "name": products[i].name,
+                                        "store": products[i].store,
+                                        "price": products[i].oldPrice,
+                                        "promo_price": products[i].price,
+                                        "discount_percent": products[i].discountPercent,
+                                        "rating": products[i].rating,
+                                        "image": products[i].image,
+                                      },
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
                           ),
                   ],
                 ),
@@ -230,49 +259,29 @@ class _PromoStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const banners = [
+      "lib/assets/promo/1.png",
+      "lib/assets/promo/2.png",
+    ];
     return SizedBox(
-      height: 56,
+      height: 72,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        itemCount: items.length,
+        itemCount: banners.length,
         separatorBuilder: (context, index) => const SizedBox(width: 10),
-        itemBuilder: (_, i) {
-          final it = items[i];
+        itemBuilder: (context, i) {
           return InkWell(
-            onTap: () => onTap(it),
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              width: 120,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: it.color,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      it.title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 12,
-                        height: 1.0,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    it.subtitle,
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.9),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 10,
-                      height: 1.0,
-                    ),
-                  ),
-                ],
+            onTap: () {
+              if (i < items.length) onTap(items[i]);
+            },
+            borderRadius: BorderRadius.circular(14),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Image.asset(
+                banners[i],
+                width: 174,
+                height: 69,
+                fit: BoxFit.cover,
               ),
             ),
           );
@@ -448,6 +457,7 @@ class _PromoBannerItem {
 }
 
 class _PromoProduct {
+  final int id;
   final String name;
   final String store;
   final int oldPrice;
@@ -457,6 +467,7 @@ class _PromoProduct {
   final String image;
 
   const _PromoProduct({
+    required this.id,
     required this.name,
     required this.store,
     required this.oldPrice,
@@ -467,6 +478,7 @@ class _PromoProduct {
   });
 
   factory _PromoProduct.fromMap(Map<String, dynamic> m) {
+    final id = ((m["id"] ?? 0) as num).toInt();
     final name = (m["name"] ?? "").toString();
     final store = (m["store"] ?? "").toString();
 
@@ -485,6 +497,7 @@ class _PromoProduct {
         : "lib/assets/produk/$img";
 
     return _PromoProduct(
+      id: id,
       name: name,
       store: store,
       oldPrice: oldPrice,

@@ -6,7 +6,7 @@ async function listProducts(req, res) {
     const category = (req.query.category || "").toString().trim();
     const q = (req.query.q || "").toString().trim().toLowerCase();
 
-    let sql = `SELECT id,name,category,store,price,rating,image FROM products`;
+    let sql = `SELECT id,name,category,store,price,rating,image,is_promo,promo_price,discount_percent FROM products`;
     const params = [];
 
     const where = [];
@@ -17,6 +17,9 @@ async function listProducts(req, res) {
     if (q) {
       where.push(`(LOWER(name) LIKE ? OR LOWER(store) LIKE ?)`);
       params.push(`%${q}%`, `%${q}%`);
+    }
+    if ((req.query.promo || "").toString() === "1") {
+      where.push(`is_promo = 1`);
     }
     if (where.length) sql += ` WHERE ` + where.join(" AND ");
 
@@ -40,7 +43,7 @@ async function productDetail(req, res) {
   try {
     const row = await get(
       db,
-      `SELECT id,name,category,store,price,rating,image FROM products WHERE id = ?`,
+      `SELECT id,name,category,store,price,rating,image,is_promo,promo_price,discount_percent FROM products WHERE id = ?`,
       [id]
     );
     if (!row) return res.status(404).json({ message: "Product not found" });

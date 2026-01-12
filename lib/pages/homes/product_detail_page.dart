@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/app_services.dart';
+import '../../services/cart_api.dart';
 import '../../services/products_api.dart';
 import '../../services/review_api.dart';
 import 'checkout_page.dart';
@@ -27,6 +28,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   bool loadingReviews = true;
   List<_Review> reviews = [];
   int? currentUserId;
+  bool loadingOthers = true;
+  List<_MiniProduct> otherMenus = [];
+  Map<int, _CartInfo> cartItems = {};
 
   int qty = 1;
 
@@ -40,10 +44,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (widget.productId > 0) {
       _load();
       _loadReviews();
+      _loadOtherMenus();
+      _loadCartSnapshot();
       _loadCurrentUser();
     } else {
       loading = false;
       loadingReviews = false;
+      loadingOthers = false;
     }
   }
 
@@ -56,6 +63,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         data = res;
         loading = false;
       });
+      _loadOtherMenus();
     } catch (_) {
       if (!mounted) return;
       setState(() => loading = false);
@@ -75,6 +83,92 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     } catch (_) {
       if (!mounted) return;
       setState(() => loadingReviews = false);
+    }
+  }
+
+  Future<void> _loadCartSnapshot() async {
+    try {
+      final rows = await CartApi.listCart();
+      if (!mounted) return;
+      setState(() {
+        cartItems = {
+          for (final r in rows)
+            (r["product_id"] as num).toInt(): _CartInfo(
+              cartId: (r["cart_id"] as num).toInt(),
+              qty: (r["qty"] as num).toInt(),
+            ),
+        };
+      });
+    } catch (_) {}
+  }
+
+  int _cartQty(int productId) => cartItems[productId]?.qty ?? 0;
+
+  Future<void> _increaseMenuQty(_MiniProduct m) async {
+    try {
+      final info = cartItems[m.id];
+      if (info == null) {
+        await ProductApi.addToCart(productId: m.id, qty: 1);
+        await _loadCartSnapshot();
+      } else {
+        await CartApi.updateItem(cartId: info.cartId, qty: info.qty + 1);
+        if (!mounted) return;
+        setState(() {
+          cartItems[m.id] = _CartInfo(cartId: info.cartId, qty: info.qty + 1);
+        });
+      }
+      if (!context.mounted) return;
+      _showCartAddedToast();
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Gagal menambahkan ke keranjang.")),
+      );
+    }
+  }
+
+  Future<void> _decreaseMenuQty(_MiniProduct m) async {
+    final info = cartItems[m.id];
+    if (info == null) return;
+    try {
+      if (info.qty <= 1) {
+        await CartApi.removeItem(cartId: info.cartId);
+        if (!mounted) return;
+        setState(() {
+          cartItems.remove(m.id);
+        });
+      } else {
+        await CartApi.updateItem(cartId: info.cartId, qty: info.qty - 1);
+        if (!mounted) return;
+        setState(() {
+          cartItems[m.id] = _CartInfo(cartId: info.cartId, qty: info.qty - 1);
+        });
+      }
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Gagal mengurangi item.")),
+      );
+    }
+  }
+
+  Future<void> _loadOtherMenus() async {
+    setState(() => loadingOthers = true);
+    try {
+      final category = (data?["category"] ?? "").toString();
+      final raw = await ProductApi.listProducts(
+        category: category.isEmpty ? null : category,
+      );
+      final list = raw.map(_MiniProduct.fromMap).toList();
+      final filtered = list.where((p) => p.id != widget.productId).toList();
+      if (!mounted) return;
+      setState(() {
+        otherMenus = filtered.take(4).toList();
+        loadingOthers = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => loadingOthers = false);
     }
   }
 
@@ -353,11 +447,25 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             "Menu ini dibuat dengan bahan pilihan, fresh, dan cocok untuk menemani aktivitas kamu.")
         .toString();
 
-    final price = ((m["price"] ?? 25000) as num).toInt();
+    final oldPrice = ((m["price"] ?? 25000) as num).toInt();
+    final promoPrice = ((m["promo_price"] ?? oldPrice) as num).toInt();
+    final discountPercent = ((m["discount_percent"] ?? 0) as num).toInt();
+    final isPromo = promoPrice > 0 && promoPrice < oldPrice;
     final rating = ((m["rating"] ?? 4.9) as num).toDouble();
     final image = _assetFromBackend((m["image"] ?? "").toString(), fallback: "lib/assets/6.png");
 
     final reviewsList = reviews;
+    final reviewCount = reviewsList.length;
+    final avgRating = reviewCount == 0
+        ? rating
+        : reviewsList
+                .map((r) => r.star)
+                .fold<int>(0, (sum, v) => sum + v) /
+            reviewCount;
+    final counts = List<int>.filled(5, 0);
+    for (final r in reviewsList) {
+      if (r.star >= 1 && r.star <= 5) counts[r.star - 1]++;
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
@@ -373,10 +481,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     Stack(
                       children: [
                         AspectRatio(
-                          aspectRatio: 1.05,
+                          aspectRatio: 1.2,
                           child: Image.asset(
                             image,
                             fit: BoxFit.cover,
+                            alignment: Alignment.topCenter,
+                            filterQuality: FilterQuality.high,
                             errorBuilder: (context, error, stackTrace) => Container(
                               color: Colors.grey.shade200,
                               child: const Center(child: Icon(Icons.image_not_supported)),
@@ -395,8 +505,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           right: 16,
                           top: 12,
                           child: _IconCircle(
-                            icon: Icons.favorite_border,
-                            onTap: () {},
+                            icon: Icons.shopping_cart_outlined,
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const CartPage()),
+                              );
+                            },
                           ),
                         ),
                       ],
@@ -454,14 +569,43 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
                           Row(
                             children: [
+                              if (isPromo)
+                                Text(
+                                  _formatRupiah(oldPrice),
+                                  style: const TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    decoration: TextDecoration.lineThrough,
+                                  ),
+                                ),
+                              if (isPromo) const SizedBox(width: 8),
                               Text(
-                                _formatRupiah(price),
+                                _formatRupiah(isPromo ? promoPrice : oldPrice),
                                 style: const TextStyle(
                                   color: Color(0xFFFF3B30),
                                   fontWeight: FontWeight.w900,
                                   fontSize: 16,
                                 ),
                               ),
+                              if (isPromo && discountPercent > 0) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFF3B30),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    "$discountPercent% off",
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 10.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
                               const Spacer(),
                               const Icon(Icons.star_rounded, size: 18, color: Color(0xFFFFB300)),
                               const SizedBox(width: 4),
@@ -475,6 +619,54 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                               ),
                             ],
                           ),
+
+                          const SizedBox(height: 14),
+
+                          const Text(
+                            "Menu Lainnya",
+                            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                          ),
+                          const SizedBox(height: 10),
+
+                          if (loadingOthers)
+                            const _Card(
+                              child: Center(child: CircularProgressIndicator()),
+                            )
+                          else if (otherMenus.isEmpty)
+                            _Card(
+                              child: Text(
+                                "Belum ada menu lain.",
+                                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                              ),
+                            )
+                          else
+                            ...otherMenus.map(
+                              (m) => _MenuItemTile(
+                                p: m,
+                                qty: _cartQty(m.id),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ProductDetailPage(
+                                        productId: m.id,
+                                        initialData: {
+                                          "id": m.id,
+                                          "name": m.name,
+                                          "store": m.store,
+                                          "price": m.price,
+                                          "rating": m.rating,
+                                          "image": m.image,
+                                          "category": m.category,
+                                        },
+                                      ),
+                                    ),
+                                  );
+                                },
+                                onMinus: () => _decreaseMenuQty(m),
+                                onPlus: () => _increaseMenuQty(m),
+                              ),
+                            ),
 
                           const SizedBox(height: 14),
 
@@ -496,7 +688,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
                           const SizedBox(height: 14),
 
-                          // Rating box (mirip screenshot)
+                          Text(
+                            "${reviewCount} Ulasan & Rating",
+                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                          ),
+                          const SizedBox(height: 10),
                           _Card(
                             child: Row(
                               children: [
@@ -504,22 +700,34 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      const Text(
-                                        "Rating",
-                                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
-                                      ),
-                                      const SizedBox(height: 8),
                                       Text(
-                                        rating.toStringAsFixed(1),
+                                        avgRating.toStringAsFixed(1),
                                         style: const TextStyle(
-                                          fontSize: 24,
+                                          fontSize: 26,
                                           fontWeight: FontWeight.w900,
                                           color: kOrange,
                                         ),
                                       ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: List.generate(
+                                          5,
+                                          (i) => Icon(
+                                            Icons.star_rounded,
+                                            size: 16,
+                                            color: i < avgRating.round()
+                                                ? const Color(0xFFFFB300)
+                                                : const Color(0xFFE5E7EB),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
                                       Text(
-                                        "Berdasarkan ulasan",
-                                        style: TextStyle(color: Colors.grey.shade600, fontSize: 11.5),
+                                        "Rating Global",
+                                        style: TextStyle(
+                                          color: Colors.grey.shade600,
+                                          fontSize: 11.5,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -529,6 +737,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                   child: Column(
                                     children: List.generate(5, (i) {
                                       final star = 5 - i;
+                                      final count = counts[star - 1];
+                                      final value =
+                                          reviewCount == 0 ? 0.0 : count / reviewCount;
                                       return Padding(
                                         padding: const EdgeInsets.symmetric(vertical: 2),
                                         child: Row(
@@ -546,11 +757,19 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                               child: ClipRRect(
                                                 borderRadius: BorderRadius.circular(10),
                                                 child: LinearProgressIndicator(
-                                                  value: _fakeProgress(star, rating),
+                                                  value: value,
                                                   minHeight: 6,
                                                   backgroundColor: const Color(0xFFF0F0F0),
                                                   valueColor: const AlwaysStoppedAnimation(kOrange),
                                                 ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              "$count",
+                                              style: TextStyle(
+                                                color: Colors.grey.shade600,
+                                                fontSize: 11,
                                               ),
                                             ),
                                           ],
@@ -601,6 +820,63 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                 onDelete: () => _deleteReview(r),
                               ),
                             ),
+
+                          if (reviewsList.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            OutlinedButton(
+                              onPressed: () {
+                                showModalBottomSheet(
+                                  context: context,
+                                  backgroundColor: Colors.white,
+                                  shape: const RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.vertical(top: Radius.circular(18)),
+                                  ),
+                                  builder: (ctx) {
+                                    return SafeArea(
+                                      child: Column(
+                                        children: [
+                                          const SizedBox(height: 10),
+                                          const Text(
+                                            "Semua Ulasan",
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 10),
+                                          Expanded(
+                                            child: ListView.builder(
+                                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                                              itemCount: reviewsList.length,
+                                              itemBuilder: (context, i) {
+                                                final r = reviewsList[i];
+                                                return _ReviewTile(
+                                                  r: r,
+                                                  isOwner: currentUserId != null &&
+                                                      r.userId == currentUserId,
+                                                  onEdit: () => _showEditReviewDialog(r),
+                                                  onDelete: () => _deleteReview(r),
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Color(0xFFFF8A00)),
+                                foregroundColor: const Color(0xFFFF8A00),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Text("Lihat Semua Review"),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -687,7 +963,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                     productId: widget.productId,
                                     name: name,
                                     image: image,
-                                    price: price,
+                                    price: isPromo ? promoPrice : oldPrice,
                                     qty: qty,
                                   ),
                                 ),
@@ -720,16 +996,16 @@ class _IconCircle extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
+      borderRadius: BorderRadius.circular(12),
       child: Ink(
-        width: 40,
-        height: 40,
+        width: 36,
+        height: 36,
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.9),
-          shape: BoxShape.circle,
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: const Color(0xFFEAEAEA)),
         ),
-        child: Icon(icon, color: Colors.black87),
+        child: Icon(icon, color: Colors.black87, size: 18),
       ),
     );
   }
@@ -810,6 +1086,210 @@ class _Card extends StatelessWidget {
       child: child,
     );
   }
+}
+
+class _MiniProduct {
+  final int id;
+  final String name;
+  final String store;
+  final int price;
+  final double rating;
+  final String image;
+  final String category;
+
+  _MiniProduct({
+    required this.id,
+    required this.name,
+    required this.store,
+    required this.price,
+    required this.rating,
+    required this.image,
+    required this.category,
+  });
+
+  factory _MiniProduct.fromMap(Map<String, dynamic> m) {
+    final img = (m["image"] ?? "").toString().trim();
+    final imagePath = img.isEmpty
+        ? "lib/assets/produk/burger.png"
+        : (img.startsWith("lib/") ? img : "lib/assets/produk/$img");
+
+    return _MiniProduct(
+      id: ((m["id"] ?? 0) as num).toInt(),
+      name: (m["name"] ?? "").toString(),
+      store: (m["store"] ?? "").toString(),
+      price: ((m["price"] ?? 0) as num).toInt(),
+      rating: ((m["rating"] ?? 4.9) as num).toDouble(),
+      image: imagePath,
+      category: (m["category"] ?? "").toString(),
+    );
+  }
+}
+
+class _MenuItemTile extends StatelessWidget {
+  final _MiniProduct p;
+  final int qty;
+  final VoidCallback onTap;
+  final VoidCallback onMinus;
+  final VoidCallback onPlus;
+
+  const _MenuItemTile({
+    required this.p,
+    required this.qty,
+    required this.onTap,
+    required this.onMinus,
+    required this.onPlus,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFEAEAEA)),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.asset(
+                p.image,
+                width: 48,
+                height: 48,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  width: 48,
+                  height: 48,
+                  color: Colors.grey.shade200,
+                  child: const Icon(Icons.image_not_supported, size: 16),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  p.name,
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12.5),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  p.store,
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF2E8),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.star_rounded, size: 14, color: Color(0xFFFFB300)),
+                      const SizedBox(width: 4),
+                      Text(
+                        "${p.rating.toStringAsFixed(1)} / 5.0",
+                        style: const TextStyle(
+                          color: Color(0xFF5C5C5C),
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Row(
+                children: [
+                  InkWell(
+                    onTap: onMinus,
+                    borderRadius: BorderRadius.circular(10),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Text(
+                        "−",
+                        style: TextStyle(
+                          color: Color(0xFFFF8A00),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    width: 24,
+                    height: 24,
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFF8A00),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      "$qty",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  InkWell(
+                    onTap: onPlus,
+                    borderRadius: BorderRadius.circular(10),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Text(
+                        "+",
+                        style: TextStyle(
+                          color: Color(0xFFFF8A00),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _formatRupiah(p.price),
+                style: const TextStyle(
+                  color: Color(0xFFFF3B30),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      ),
+    );
+  }
+}
+
+class _CartInfo {
+  final int cartId;
+  final int qty;
+
+  _CartInfo({required this.cartId, required this.qty});
 }
 
 class _Review {
