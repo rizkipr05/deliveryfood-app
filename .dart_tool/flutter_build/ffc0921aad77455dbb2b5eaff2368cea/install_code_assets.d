@@ -1,0 +1,1 @@
+ /home/rizky/Documents/Delivery-app/.dart_tool/flutter_build/ffc0921aad77455dbb2b5eaff2368cea/native_assets.json: 
