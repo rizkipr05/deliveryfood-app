@@ -597,7 +597,7 @@ class _BottomBar extends StatelessWidget {
               child: _BottomItem(
                 active: index == 1,
                 icon: Icons.explore_outlined,
-                label: "Explore",
+                label: "Promo",
                 onTap: () => onChange(1),
               ),
             ),
