@@ -6,7 +6,7 @@ const bcrypt = require("bcryptjs");
   const db = openDb();
 
   try {
-        await run(
+    await run(
       db,
       `
       CREATE TABLE IF NOT EXISTS products (
@@ -23,6 +23,53 @@ const bcrypt = require("bcryptjs");
     );
 
     await run(db, `CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);`);
+
+    await run(
+      db,
+      `
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        email TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'customer',
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      `
+    );
+
+    await run(
+      db,
+      `
+      CREATE TABLE IF NOT EXISTS cart_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL,
+        qty INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(user_id, product_id),
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE
+      );
+      `
+    );
+
+    await run(
+      db,
+      `
+      CREATE TABLE IF NOT EXISTS ulasan (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL,
+        star INTEGER NOT NULL,
+        comment TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE
+      );
+      `
+    );
 
     // Seed products jika masih kosong
     const pCount = await get(db, `SELECT COUNT(*) as c FROM products`);

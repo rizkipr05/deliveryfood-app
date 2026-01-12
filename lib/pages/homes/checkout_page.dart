@@ -28,16 +28,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
   bool loading = true;
   List<Map<String, dynamic>> addresses = [];
   int? selectedAddressId;
+  String deliveryMethod = "pickup";
+  late int qty;
 
   final noteC = TextEditingController();
 
-  int get subtotal => widget.price * widget.qty;
-  int get deliveryFee => 5000;
+  int get subtotal => widget.price * qty;
+  int get deliveryFee => deliveryMethod == "delivery" ? 5000 : 0;
   int get total => subtotal + deliveryFee;
 
   @override
   void initState() {
     super.initState();
+    qty = widget.qty;
     _loadAddresses();
   }
 
@@ -85,7 +88,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         addressId: selectedAddressId!,
         note: noteC.text.trim(),
         items: [
-          {"product_id": widget.productId, "qty": widget.qty},
+          {"product_id": widget.productId, "qty": qty},
         ],
       );
 
@@ -119,7 +122,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         elevation: 0,
         centerTitle: true,
         title: const Text(
-          "Checkout",
+          "Pesanan",
           style: TextStyle(fontWeight: FontWeight.w900, color: Colors.black),
         ),
         leading: IconButton(
@@ -133,6 +136,95 @@ class _CheckoutPageState extends State<CheckoutPage> {
             : ListView(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
                 children: [
+                  const Text(
+                    "Pesanan",
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                  ),
+                  const SizedBox(height: 10),
+
+                  _Card(
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.asset(
+                            widget.image,
+                            width: 56,
+                            height: 56,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                Container(width: 56, height: 56, color: Colors.grey.shade200),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.name,
+                                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12.8),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _formatRupiah(widget.price),
+                                style: const TextStyle(
+                                  color: Color(0xFFFF3B30),
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 12.2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        _QtyPicker(
+                          qty: qty,
+                          onMinus: () => setState(() {
+                            if (qty > 1) qty--;
+                          }),
+                          onPlus: () => setState(() => qty++),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  const Text(
+                    "Metode Pengantaran",
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                  ),
+                  const SizedBox(height: 10),
+
+                  _Card(
+                    child: Row(
+                      children: [
+                        _SelectChip(
+                          active: deliveryMethod == "pickup",
+                          label: "Pickup",
+                          onTap: () => setState(() => deliveryMethod = "pickup"),
+                        ),
+                        const SizedBox(width: 10),
+                        _SelectChip(
+                          active: deliveryMethod == "delivery",
+                          label: "Delivery",
+                          onTap: () => setState(() => deliveryMethod = "delivery"),
+                        ),
+                        const Spacer(),
+                        Text(
+                          deliveryMethod == "delivery" ? _formatRupiah(deliveryFee) : "Gratis",
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
                   const Text(
                     "Alamat Pengiriman",
                     style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
@@ -165,58 +257,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   const SizedBox(height: 14),
 
                   const Text(
-                    "Detail Pesanan",
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
-                  ),
-                  const SizedBox(height: 10),
-
-                  _Card(
-                    child: Row(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.asset(
-                            widget.image,
-                            width: 56,
-                            height: 56,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Container(width: 56, height: 56, color: Colors.grey.shade200),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                widget.name,
-                                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12.8),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                "Qty: ${widget.qty}",
-                                style: TextStyle(color: Colors.grey.shade600, fontSize: 11.5),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Text(
-                          _formatRupiah(subtotal),
-                          style: const TextStyle(
-                            color: Color(0xFFFF3B30),
-                            fontWeight: FontWeight.w900,
-                            fontSize: 12.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  const Text(
-                    "Catatan",
+                    "Catatan Pesanan (Opsional)",
                     style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
                   ),
                   const SizedBox(height: 10),
@@ -239,7 +280,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   const SizedBox(height: 14),
 
                   const Text(
-                    "Ringkasan Pembayaran",
+                    "Detail Pembayaran",
                     style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
                   ),
                   const SizedBox(height: 10),
@@ -282,7 +323,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
             onPressed: _checkout,
-            child: const Text("Bayar", style: TextStyle(fontWeight: FontWeight.w900)),
+            child: const Text("Bayar Sekarang", style: TextStyle(fontWeight: FontWeight.w900)),
           ),
         ),
       ),
@@ -350,6 +391,106 @@ class _SelectTile extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SelectChip extends StatelessWidget {
+  static const kOrange = Color(0xFFFF8A00);
+
+  final bool active;
+  final String label;
+  final VoidCallback onTap;
+
+  const _SelectChip({
+    required this.active,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: active ? kOrange : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: active ? kOrange : const Color(0xFFEAEAEA)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w800,
+            color: active ? Colors.white : Colors.grey.shade700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QtyPicker extends StatelessWidget {
+  static const kOrange = Color(0xFFFF8A00);
+
+  final int qty;
+  final VoidCallback onMinus;
+  final VoidCallback onPlus;
+
+  const _QtyPicker({required this.qty, required this.onMinus, required this.onPlus});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFEAEAEA)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _MiniBtn(icon: Icons.remove, onTap: onMinus),
+          const SizedBox(width: 8),
+          Text(
+            "$qty",
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12.5),
+          ),
+          const SizedBox(width: 8),
+          _MiniBtn(icon: Icons.add, onTap: onPlus, active: true),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniBtn extends StatelessWidget {
+  static const kOrange = Color(0xFFFF8A00);
+
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool active;
+
+  const _MiniBtn({required this.icon, required this.onTap, this.active = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Ink(
+        width: 26,
+        height: 26,
+        decoration: BoxDecoration(
+          color: active ? kOrange.withValues(alpha: 0.12) : const Color(0xFFF4F5F7),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, size: 16, color: active ? kOrange : Colors.black87),
       ),
     );
   }

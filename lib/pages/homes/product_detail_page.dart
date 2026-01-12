@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../services/app_services.dart';
 import '../../services/products_api.dart';
+import '../../services/review_api.dart';
 import 'checkout_page.dart';
+import 'cart_page.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final int productId;
@@ -21,6 +24,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   bool loading = true;
   Map<String, dynamic>? data;
+  bool loadingReviews = true;
+  List<_Review> reviews = [];
+  int? currentUserId;
 
   int qty = 1;
 
@@ -33,8 +39,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     }
     if (widget.productId > 0) {
       _load();
+      _loadReviews();
+      _loadCurrentUser();
     } else {
       loading = false;
+      loadingReviews = false;
     }
   }
 
@@ -53,11 +62,286 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     }
   }
 
+  Future<void> _loadReviews() async {
+    setState(() => loadingReviews = true);
+    try {
+      final raw = await ReviewApi.listByProduct(widget.productId);
+      final list = raw.map(_Review.fromMap).toList();
+      if (!mounted) return;
+      setState(() {
+        reviews = list;
+        loadingReviews = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => loadingReviews = false);
+    }
+  }
+
+  Future<void> _loadCurrentUser() async {
+    final token = await AppServices.tokenStore.getToken();
+    if (token == null || token.isEmpty) return;
+    try {
+      final user = await AppServices.authApi.me(token);
+      if (!mounted) return;
+      setState(() {
+        currentUserId = (user["id"] as num?)?.toInt();
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _showAddReviewDialog() async {
+    final commentC = TextEditingController();
+    int star = 5;
+    try {
+      final ok = await showDialog<bool>(
+        context: context,
+        barrierDismissible: true,
+        builder: (ctx) {
+          return StatefulBuilder(
+            builder: (ctx, setLocal) {
+              return AlertDialog(
+                title: const Text("Tambah Ulasan"),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(5, (i) {
+                        final active = i < star;
+                        return IconButton(
+                          onPressed: () => setLocal(() => star = i + 1),
+                          icon: Icon(
+                            active ? Icons.star_rounded : Icons.star_outline_rounded,
+                            color: const Color(0xFFFFB300),
+                          ),
+                        );
+                      }),
+                    ),
+                    TextField(
+                      controller: commentC,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        hintText: "Tulis ulasan kamu...",
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text("Batal"),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text("Kirim"),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+
+      if (ok != true) return;
+
+      await ReviewApi.addReview(
+        productId: widget.productId,
+        star: star,
+        comment: commentC.text,
+      );
+      if (!mounted) return;
+      await _loadReviews();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Ulasan berhasil ditambahkan.")),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Gagal menambahkan ulasan.")),
+      );
+    } finally {
+      commentC.dispose();
+    }
+  }
+
+  Future<void> _showEditReviewDialog(_Review review) async {
+    final commentC = TextEditingController(text: review.comment);
+    int star = review.star;
+    try {
+      final ok = await showDialog<bool>(
+        context: context,
+        barrierDismissible: true,
+        builder: (ctx) {
+          return StatefulBuilder(
+            builder: (ctx, setLocal) {
+              return AlertDialog(
+                title: const Text("Edit Ulasan"),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(5, (i) {
+                        final active = i < star;
+                        return IconButton(
+                          onPressed: () => setLocal(() => star = i + 1),
+                          icon: Icon(
+                            active ? Icons.star_rounded : Icons.star_outline_rounded,
+                            color: const Color(0xFFFFB300),
+                          ),
+                        );
+                      }),
+                    ),
+                    TextField(
+                      controller: commentC,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        hintText: "Tulis ulasan kamu...",
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text("Batal"),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text("Simpan"),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+
+      if (ok != true) return;
+
+      await ReviewApi.updateReview(
+        reviewId: review.id,
+        star: star,
+        comment: commentC.text,
+      );
+      if (!mounted) return;
+      await _loadReviews();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Ulasan diperbarui.")),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Gagal memperbarui ulasan.")),
+      );
+    } finally {
+      commentC.dispose();
+    }
+  }
+
+  Future<void> _deleteReview(_Review review) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text("Hapus Ulasan?"),
+          content: const Text("Ulasan ini akan dihapus permanen."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Batal"),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("Hapus"),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (ok != true) return;
+
+    try {
+      await ReviewApi.deleteReview(reviewId: review.id);
+      if (!mounted) return;
+      await _loadReviews();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Ulasan dihapus.")),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Gagal menghapus ulasan.")),
+      );
+    }
+  }
+
   String _assetFromBackend(String file, {String fallback = "lib/assets/6.png"}) {
     final f = file.trim();
     if (f.isEmpty) return fallback;
     if (f.startsWith("lib/")) return f;
     return "lib/assets/produk/$f";
+  }
+
+  void _showCartAddedToast() {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: Colors.black.withValues(alpha: 0.35),
+      builder: (ctx) {
+        return Center(
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: 260,
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x22000000),
+                    blurRadius: 16,
+                    offset: Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 54,
+                    height: 54,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [Color(0xFFFFA200), Color(0xFFFF3B30)],
+                      ),
+                    ),
+                    child: const Icon(Icons.check, color: Colors.white, size: 30),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    "Ditambahkan Ke Keranjang",
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    Future.delayed(const Duration(milliseconds: 1100), () {
+      if (mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
+    });
   }
 
   @override
@@ -73,11 +357,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     final rating = ((m["rating"] ?? 4.9) as num).toDouble();
     final image = _assetFromBackend((m["image"] ?? "").toString(), fallback: "lib/assets/6.png");
 
-    final reviewsRaw = (m["reviews"] is List) ? (m["reviews"] as List) : [];
-    final reviews = reviewsRaw
-        .map((e) => (e as Map).cast<String, dynamic>())
-        .map(_Review.fromMap)
-        .toList();
+    final reviewsList = reviews;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
@@ -285,13 +565,27 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
                           const SizedBox(height: 14),
 
-                          const Text(
-                            "Ulasan",
-                            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                          Row(
+                            children: [
+                              const Expanded(
+                                child: Text(
+                                  "Ulasan",
+                                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: loadingReviews ? null : _showAddReviewDialog,
+                                child: const Text("Tambah"),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 10),
 
-                          if (reviews.isEmpty)
+                          if (loadingReviews)
+                            const _Card(
+                              child: Center(child: CircularProgressIndicator()),
+                            )
+                          else if (reviewsList.isEmpty)
                             _Card(
                               child: Text(
                                 "Belum ada ulasan dari backend.",
@@ -299,7 +593,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                               ),
                             )
                           else
-                            ...reviews.map((r) => _ReviewTile(r: r)),
+                            ...reviewsList.map(
+                              (r) => _ReviewTile(
+                                r: r,
+                                isOwner: currentUserId != null && r.userId == currentUserId,
+                                onEdit: () => _showEditReviewDialog(r),
+                                onDelete: () => _deleteReview(r),
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -319,44 +620,84 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           ),
           child: Row(
             children: [
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: kOrange,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  onPressed: loading
-                      ? null
-                      : () async {
-                          // 1) masukin cart (backend)
-                          try {
-                            await ProductApi.addToCart(productId: widget.productId, qty: qty);
-                          } catch (_) {
-                            // kalau endpoint cart belum ada, tetap lanjut ke checkout (optional)
-                          }
-
+              InkWell(
+                onTap: loading
+                    ? null
+                    : () async {
+                        try {
+                          await ProductApi.addToCart(productId: widget.productId, qty: qty);
                           if (!context.mounted) return;
-
-                          // 2) buka checkout
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => CheckoutPage(
-                                productId: widget.productId,
-                                name: name,
-                                image: image,
-                                price: price,
-                                qty: qty,
-                              ),
-                            ),
+                          _showCartAddedToast();
+                        } catch (_) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Gagal menambahkan ke keranjang.")),
                           );
-                        },
-                  child: const Text(
-                    "Pesan Sekarang",
-                    style: TextStyle(fontWeight: FontWeight.w900),
+                        }
+                      },
+                borderRadius: BorderRadius.circular(14),
+                child: Ink(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFEAEAEA)),
+                  ),
+                  child: const Icon(Icons.shopping_cart_outlined, color: kOrange),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SizedBox(
+                  height: 46,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFFA200), Color(0xFFFF3B30)],
+                      ),
+                    ),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        foregroundColor: Colors.white,
+                        shadowColor: Colors.transparent,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      onPressed: loading
+                          ? null
+                          : () async {
+                              try {
+                                await ProductApi.addToCart(
+                                  productId: widget.productId,
+                                  qty: qty,
+                                );
+                              } catch (_) {}
+
+                              if (!context.mounted) return;
+
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => CheckoutPage(
+                                    productId: widget.productId,
+                                    name: name,
+                                    image: image,
+                                    price: price,
+                                    qty: qty,
+                                  ),
+                                ),
+                              );
+                            },
+                      child: const Text(
+                        "Pesan & Bayar Sekarang",
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -472,24 +813,46 @@ class _Card extends StatelessWidget {
 }
 
 class _Review {
+  final int id;
+  final int userId;
   final String name;
   final int star;
   final String comment;
+  final String createdAt;
 
-  _Review({required this.name, required this.star, required this.comment});
+  _Review({
+    required this.id,
+    required this.userId,
+    required this.name,
+    required this.star,
+    required this.comment,
+    required this.createdAt,
+  });
 
   factory _Review.fromMap(Map<String, dynamic> m) {
     return _Review(
+      id: ((m["id"] ?? 0) as num).toInt(),
+      userId: ((m["user_id"] ?? 0) as num).toInt(),
       name: (m["name"] ?? "User").toString(),
       star: ((m["star"] ?? 5) as num).toInt(),
       comment: (m["comment"] ?? "").toString(),
+      createdAt: (m["created_at"] ?? "").toString(),
     );
   }
 }
 
 class _ReviewTile extends StatelessWidget {
   final _Review r;
-  const _ReviewTile({required this.r});
+  final bool isOwner;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _ReviewTile({
+    required this.r,
+    required this.isOwner,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -506,6 +869,21 @@ class _ReviewTile extends StatelessWidget {
         children: [
           Row(
             children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Center(
+                  child: Text(
+                    r.name.isEmpty ? "U" : r.name[0].toUpperCase(),
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   r.name,
@@ -522,6 +900,18 @@ class _ReviewTile extends StatelessWidget {
                   ),
                 ),
               ),
+              if (isOwner)
+                PopupMenuButton<String>(
+                  onSelected: (v) {
+                    if (v == "edit") onEdit();
+                    if (v == "delete") onDelete();
+                  },
+                  itemBuilder: (ctx) => const [
+                    PopupMenuItem(value: "edit", child: Text("Edit")),
+                    PopupMenuItem(value: "delete", child: Text("Hapus")),
+                  ],
+                  icon: const Icon(Icons.more_vert, size: 18),
+                ),
             ],
           ),
           const SizedBox(height: 8),
@@ -529,10 +919,33 @@ class _ReviewTile extends StatelessWidget {
             r.comment.isEmpty ? "Mantap dan enak!" : r.comment,
             style: TextStyle(color: Colors.grey.shade700, fontSize: 12.2, height: 1.3),
           ),
+          const SizedBox(height: 8),
+          Text(
+            _timeAgo(r.createdAt),
+            style: TextStyle(color: Colors.grey.shade500, fontSize: 10.5),
+          ),
         ],
       ),
     );
   }
+}
+
+String _timeAgo(String iso) {
+  if (iso.isEmpty) return "";
+  DateTime? dt;
+  try {
+    dt = DateTime.parse(iso);
+  } catch (_) {
+    return iso;
+  }
+  final diff = DateTime.now().difference(dt);
+  if (diff.inMinutes < 1) return "Baru saja";
+  if (diff.inMinutes < 60) return "${diff.inMinutes} Menit Lalu";
+  if (diff.inHours < 24) return "${diff.inHours} Jam Lalu";
+  if (diff.inDays < 7) return "${diff.inDays} Hari Lalu";
+  if (diff.inDays < 30) return "${(diff.inDays / 7).floor()} Minggu Lalu";
+  if (diff.inDays < 365) return "${(diff.inDays / 30).floor()} Bulan Lalu";
+  return "${(diff.inDays / 365).floor()} Tahun Lalu";
 }
 
 double _fakeProgress(int star, double rating) {

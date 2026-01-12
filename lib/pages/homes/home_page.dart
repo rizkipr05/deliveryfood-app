@@ -5,6 +5,8 @@ import '../../services/api_client.dart';
 import '../promo/promo_page.dart';
 import '../profile/profile_page.dart';
 import 'product_detail_page.dart';
+import 'cart_page.dart';
+import 'notification_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -158,8 +160,18 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(height: 8),
           _TopHeader(
             name: loadingUser ? "..." : userName,
-            onCartTap: () {},
-            onNotifTap: () {},
+            onCartTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CartPage()),
+              );
+            },
+            onNotifTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const NotificationPage()),
+              );
+            },
           ),
           const SizedBox(height: 10),
           _SearchBar(

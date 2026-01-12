@@ -6,6 +6,7 @@ const helmet = require("helmet");
 const authRoutes = require("./routes/authRoutes");
 const auth2Routes = require("./routes/auth2Routes");
 const productRoutes = require("./routes/productRoutes");
+const ulasanRoutes = require("./routes/ulasanRoutes");
 
 const app = express();
 
@@ -18,6 +19,7 @@ app.get("/health", (req, res) => res.json({ ok: true }));
 app.use("/api/auth", authRoutes);
 app.use("/api/auth2", auth2Routes);
 app.use("/api", productRoutes);
+app.use("/api", ulasanRoutes);
 
 app.use((req, res) => res.status(404).json({ message: "Not Found" }));
 

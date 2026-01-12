@@ -1,4 +1,4 @@
-const { openDb, all } = require("../db/sqlite");
+const { openDb, all, get } = require("../db/sqlite");
 
 async function listProducts(req, res) {
   const db = openDb();
@@ -32,4 +32,25 @@ async function listProducts(req, res) {
   }
 }
 
-module.exports = { listProducts };
+async function productDetail(req, res) {
+  const id = Number(req.params.id || 0);
+  if (!id) return res.status(400).json({ message: "Invalid product id" });
+
+  const db = openDb();
+  try {
+    const row = await get(
+      db,
+      `SELECT id,name,category,store,price,rating,image FROM products WHERE id = ?`,
+      [id]
+    );
+    if (!row) return res.status(404).json({ message: "Product not found" });
+    return res.json({ data: row });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ message: "Server error" });
+  } finally {
+    db.close();
+  }
+}
+
+module.exports = { listProducts, productDetail };
