@@ -1,52 +1,36 @@
-import 'api_client.dart';
+import 'app_services.dart';
 
-class ProductsApi {
-  final ApiClient client;
-  ProductsApi(this.client);
+class ProductApi {
+  static Future<Map<String, dynamic>> detail(int id) async {
+    final token = await AppServices.tokenStore.getToken();
 
-  Future<List<Product>> list({String? category, String? q}) async {
-    final query = <String, String>{};
-    if (category != null && category.isNotEmpty) query["category"] = category;
-    if (q != null && q.isNotEmpty) query["q"] = q;
+    final res = await AppServices.apiClient.get(
+      "/api/products/$id",
+      headers: {
+        "Accept": "application/json",
+        if (token != null && token.isNotEmpty) "Authorization": "Bearer $token",
+      },
+    );
 
-    final path = query.isEmpty
-        ? "/api/products"
-        : "/api/products?${Uri(queryParameters: query).query}";
-
-    final data = await client.get(path);
-    final list = (data["data"] as List).cast<Map<String, dynamic>>();
-    return list.map((e) => Product.fromJson(e)).toList();
+    final data = res["data"];
+    if (data is Map) return data.cast<String, dynamic>();
+    return {};
   }
-}
 
-class Product {
-  final int id;
-  final String name;
-  final String category;
-  final String store;
-  final int price;
-  final double rating;
-  final String? image; // "food_1.jpg"
+  static Future<void> addToCart({
+    required int productId,
+    required int qty,
+  }) async {
+    final token = await AppServices.tokenStore.getToken();
 
-  Product({
-    required this.id,
-    required this.name,
-    required this.category,
-    required this.store,
-    required this.price,
-    required this.rating,
-    this.image,
-  });
-
-  factory Product.fromJson(Map<String, dynamic> json) {
-    return Product(
-      id: (json["id"] as num).toInt(),
-      name: (json["name"] ?? "").toString(),
-      category: (json["category"] ?? "Semua").toString(),
-      store: (json["store"] ?? "").toString(),
-      price: (json["price"] as num).toInt(),
-      rating: (json["rating"] as num).toDouble(),
-      image: json["image"]?.toString(),
+    await AppServices.apiClient.post(
+      "/api/cart/add",
+      body: {"product_id": productId, "qty": qty},
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        if (token != null && token.isNotEmpty) "Authorization": "Bearer $token",
+      },
     );
   }
 }

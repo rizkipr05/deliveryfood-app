@@ -1,4 +1,4 @@
-const { openDb, all } = require('../db/sqlite3');
+const { openDb, all } = require('../db/sqlite');
 const { get } = require('../routes/auth2Routes');
 
 async function getPromos(req, res) {

@@ -4,6 +4,7 @@ import '../../services/app_services.dart';
 import '../../services/api_client.dart';
 import '../promo/promo_page.dart';
 import '../profile/profile_page.dart';
+import 'product_detail_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -96,7 +97,10 @@ class _HomePageState extends State<HomePage> {
             ? "lib/assets/produk/burger.png"
             : "lib/assets/produk/$img";
 
+        final id = (m["id"] as num?)?.toInt() ?? 0;
+
         return _FoodItem(
+          id: id,
           cat: (m["category"] ?? "Semua").toString(),
           name: (m["name"] ?? "").toString(),
           store: (m["store"] ?? "").toString(),
@@ -180,17 +184,44 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(height: 8),
           Expanded(
             child: loadingProducts
-                ? const Center(child: CircularProgressIndicator())
-                : RefreshIndicator(
-                    onRefresh: _loadProducts,
-                    child: ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      itemCount: items.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 10),
-                      itemBuilder: (context, i) =>
-                          _FoodTile(item: items[i], onTap: () {}),
-                    ),
-                  ),
+                        ? const Center(child: CircularProgressIndicator())
+                        : RefreshIndicator(
+                            onRefresh: _loadProducts,
+                            child: ListView.separated(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                              itemCount: items.length,
+                              separatorBuilder: (_, _) => const SizedBox(height: 10),
+                              itemBuilder: (context, i) => _FoodTile(
+                                item: items[i],
+                                onTap: () {
+                                  final item = items[i];
+                                  final id = item.id;
+                                  if (id <= 0) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text("Produk tidak ditemukan.")),
+                                    );
+                                    return;
+                                  }
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ProductDetailPage(
+                                        productId: id,
+                                        initialData: {
+                                          "id": id,
+                                          "name": item.name,
+                                          "store": item.store,
+                                          "price": item.price,
+                                          "rating": item.rating,
+                                          "image": item.image,
+                                        },
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
           ),
         ],
       ),
@@ -679,6 +710,7 @@ class _BottomItem extends StatelessWidget {
 // ========================= Model + Utils =========================
 
 class _FoodItem {
+  final int id;
   final String cat;
   final String name;
   final String store;
@@ -687,6 +719,7 @@ class _FoodItem {
   final String image;
 
   const _FoodItem({
+    required this.id,
     required this.cat,
     required this.name,
     required this.store,

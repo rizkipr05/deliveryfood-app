@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_app/services/api_client.dart';
 import 'package:flutter_app/services/auth_api.dart';
 import 'package:flutter_app/services/token_store.dart';
-import 'products_api.dart';
 
 class AppServices {
   // Android Emulator: http://10.0.2.2:3001
@@ -20,5 +19,4 @@ class AppServices {
   static final apiClient = ApiClient(baseUrl: baseUrl);
   static final authApi = AuthApi(apiClient);
   static final tokenStore = TokenStore();
-  static final productsApi = ProductsApi(apiClient);
 }
