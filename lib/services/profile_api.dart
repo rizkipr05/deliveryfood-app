@@ -25,12 +25,13 @@ class ProfileApi {
   static Future<Map<String, dynamic>> updateProfile({
     required String name,
     required String phone,
+    String? avatarUrl,
   }) async {
     final headers = await _authHeaders();
     
     return await AppServices.apiClient.put(
       "/api/users/me",
-      body: {"name": name, "phone": phone},
+      body: {"name": name, "phone": phone, "avatar_url": avatarUrl ?? ""},
       headers: headers,
     );
   }

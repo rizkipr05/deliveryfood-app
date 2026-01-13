@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../../services/app_services.dart';
 import '../../services/api_client.dart';
@@ -7,6 +8,7 @@ import '../profile/profile_page.dart';
 import 'product_detail_page.dart';
 import 'cart_page.dart';
 import 'notification_page.dart';
+import '../aktivitas/activity_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -21,6 +23,7 @@ class _HomePageState extends State<HomePage> {
   int bottomIndex = 0;
 
   String userName = "User";
+  String? avatarUrl;
   bool loadingUser = true;
 
   bool loadingProducts = true;
@@ -62,6 +65,8 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
       setState(() {
         userName = (user["name"] ?? "User").toString();
+        avatarUrl = (user["avatar_url"] ?? "").toString();
+        if (avatarUrl != null && avatarUrl!.isEmpty) avatarUrl = null;
         loadingUser = false;
       });
     } on ApiException catch (_) {
@@ -141,7 +146,7 @@ class _HomePageState extends State<HomePage> {
         children: [
           _homeTab(context),
           const PromoPage(),
-          const _PlaceholderTab(title: "Order"),
+          const ActivityPage(),
           const ProfilePage(),
         ],
       ),
@@ -160,6 +165,7 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(height: 8),
           _TopHeader(
             name: loadingUser ? "..." : userName,
+            avatarUrl: avatarUrl,
             onCartTap: () {
               Navigator.push(
                 context,
@@ -196,44 +202,46 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(height: 8),
           Expanded(
             child: loadingProducts
-                        ? const Center(child: CircularProgressIndicator())
-                        : RefreshIndicator(
-                            onRefresh: _loadProducts,
-                            child: ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                              itemCount: items.length,
-                              separatorBuilder: (_, _) => const SizedBox(height: 10),
-                              itemBuilder: (context, i) => _FoodTile(
-                                item: items[i],
-                                onTap: () {
-                                  final item = items[i];
-                                  final id = item.id;
-                                  if (id <= 0) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text("Produk tidak ditemukan.")),
-                                    );
-                                    return;
-                                  }
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => ProductDetailPage(
-                                        productId: id,
-                                        initialData: {
-                                          "id": id,
-                                          "name": item.name,
-                                          "store": item.store,
-                                          "price": item.price,
-                                          "rating": item.rating,
-                                          "image": item.image,
-                                        },
-                                      ),
-                                    ),
-                                  );
+                ? const Center(child: CircularProgressIndicator())
+                : RefreshIndicator(
+                    onRefresh: _loadProducts,
+                    child: ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      itemCount: items.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 10),
+                      itemBuilder: (context, i) => _FoodTile(
+                        item: items[i],
+                        onTap: () {
+                          final item = items[i];
+                          final id = item.id;
+                          if (id <= 0) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Produk tidak ditemukan."),
+                              ),
+                            );
+                            return;
+                          }
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ProductDetailPage(
+                                productId: id,
+                                initialData: {
+                                  "id": id,
+                                  "name": item.name,
+                                  "store": item.store,
+                                  "price": item.price,
+                                  "rating": item.rating,
+                                  "image": item.image,
                                 },
                               ),
                             ),
-                          ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
           ),
         ],
       ),
@@ -278,11 +286,13 @@ class _PlaceholderTab extends StatelessWidget {
 
 class _TopHeader extends StatelessWidget {
   final String name;
+  final String? avatarUrl;
   final VoidCallback onCartTap;
   final VoidCallback onNotifTap;
 
   const _TopHeader({
     required this.name,
+    required this.avatarUrl,
     required this.onCartTap,
     required this.onNotifTap,
   });
@@ -298,8 +308,8 @@ class _TopHeader extends StatelessWidget {
             height: 38,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              image: const DecorationImage(
-                image: AssetImage("lib/assets/5.png"),
+              image: DecorationImage(
+                image: _avatarProvider(avatarUrl),
                 fit: BoxFit.cover,
               ),
             ),
@@ -379,6 +389,23 @@ class _IconSquareButton extends StatelessWidget {
       ),
     );
   }
+}
+
+ImageProvider _avatarProvider(String? dataUrl) {
+  if (dataUrl == null || dataUrl.isEmpty) {
+    return const AssetImage("lib/assets/5.png");
+  }
+  if (dataUrl.startsWith("data:image")) {
+    final idx = dataUrl.indexOf(",");
+    if (idx != -1) {
+      final b64 = dataUrl.substring(idx + 1);
+      return MemoryImage(base64Decode(b64));
+    }
+  }
+  if (dataUrl.startsWith("http")) {
+    return NetworkImage(dataUrl);
+  }
+  return const AssetImage("lib/assets/5.png");
 }
 
 class _SearchBar extends StatelessWidget {
@@ -649,7 +676,7 @@ class _BottomBar extends StatelessWidget {
               child: _BottomItem(
                 active: index == 2,
                 icon: Icons.receipt_long_outlined,
-                label: "Order",
+                label: "Aktivitas",
                 onTap: () => onChange(2),
               ),
             ),

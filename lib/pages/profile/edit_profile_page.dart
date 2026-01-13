@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_app/services/profile_api.dart';
+import 'package:image_picker/image_picker.dart';
 
 class EditProfilePage extends StatefulWidget {
   final Map<String, dynamic>? user;
@@ -15,12 +17,15 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final nameC = TextEditingController();
   final phoneC = TextEditingController();
   bool loading = false;
+  String? avatarDataUrl;
 
   @override
   void initState() {
     super.initState();
     nameC.text = (widget.user?["name"] ?? "").toString();
     phoneC.text = (widget.user?["phone"] ?? "").toString();
+    avatarDataUrl = (widget.user?["avatar_url"] ?? "").toString();
+    if (avatarDataUrl != null && avatarDataUrl!.isEmpty) avatarDataUrl = null;
   }
 
   @override
@@ -41,7 +46,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
     setState(() => loading = true);
 
     try {
-      await ProfileApi.updateProfile(name: name, phone: phone);
+      await ProfileApi.updateProfile(
+        name: name,
+        phone: phone,
+        avatarUrl: avatarDataUrl,
+      );
       if (!mounted) return;
       setState(() => loading = false);
       Navigator.pop(context, true);
@@ -54,6 +63,17 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   void _snack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Future<void> _pickAvatar() async {
+    final picker = ImagePicker();
+    final img = await picker.pickImage(source: ImageSource.gallery, imageQuality: 75);
+    if (img == null) return;
+    final bytes = await img.readAsBytes();
+    final b64 = base64Encode(bytes);
+    setState(() {
+      avatarDataUrl = "data:image/jpeg;base64,$b64";
+    });
   }
 
   @override
@@ -78,19 +98,25 @@ class _EditProfilePageState extends State<EditProfilePage> {
         children: [
           Center(
             child: Column(
-              children: const [
-                SizedBox(height: 10),
-                CircleAvatar(
-                  radius: 34,
-                  backgroundImage: AssetImage("lib/assets/5.png"),
+              children: [
+                const SizedBox(height: 10),
+                GestureDetector(
+                  onTap: _pickAvatar,
+                  child: CircleAvatar(
+                    radius: 34,
+                    backgroundImage: _avatarProvider(avatarDataUrl),
+                  ),
                 ),
-                SizedBox(height: 8),
-                Text(
-                  "Change Profile Photo",
-                  style: TextStyle(
-                    color: kOrange,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 12,
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: _pickAvatar,
+                  child: const Text(
+                    "Change Profile Photo",
+                    style: TextStyle(
+                      color: kOrange,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12,
+                    ),
                   ),
                 ),
               ],
@@ -206,4 +232,21 @@ class _Btn extends StatelessWidget {
       ),
     );
   }
+}
+
+ImageProvider _avatarProvider(String? dataUrl) {
+  if (dataUrl == null || dataUrl.isEmpty) {
+    return const AssetImage("lib/assets/5.png");
+  }
+  if (dataUrl.startsWith("data:image")) {
+    final idx = dataUrl.indexOf(",");
+    if (idx != -1) {
+      final b64 = dataUrl.substring(idx + 1);
+      return MemoryImage(base64Decode(b64));
+    }
+  }
+  if (dataUrl.startsWith("http")) {
+    return NetworkImage(dataUrl);
+  }
+  return const AssetImage("lib/assets/5.png");
 }

@@ -50,6 +50,15 @@ const bcrypt = require("bcryptjs");
       `
     );
 
+    const userColumns = await all(db, `PRAGMA table_info(users)`);
+    const hasUserCol = (name) => userColumns.some((c) => c.name === name);
+    if (!hasUserCol("phone")) {
+      await run(db, `ALTER TABLE users ADD COLUMN phone TEXT`);
+    }
+    if (!hasUserCol("avatar_url")) {
+      await run(db, `ALTER TABLE users ADD COLUMN avatar_url TEXT`);
+    }
+
     await run(
       db,
       `

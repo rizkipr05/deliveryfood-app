@@ -87,9 +87,11 @@ async function me(req, res) {
   // req.user dari middleware
   const db = openDb();
   try {
-    const row = await get(db, `SELECT id, name, email, role, created_at FROM users WHERE id = ?`, [
-      req.user.id,
-    ]);
+    const row = await get(
+      db,
+      `SELECT id, name, email, role, phone, avatar_url, created_at FROM users WHERE id = ?`,
+      [req.user.id]
+    );
     if (!row) return res.status(404).json({ message: "User not found" });
     return res.json({ user: row });
   } catch (e) {

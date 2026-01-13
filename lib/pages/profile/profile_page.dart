@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/services/profile_api.dart';
 import 'package:flutter_app/services/app_services.dart';
+import 'dart:convert';
 import 'edit_profile_page.dart';
 import 'address_page.dart';
 import 'account_page.dart';
@@ -107,8 +108,8 @@ class _ProfilePageState extends State<ProfilePage> {
                             height: 72,
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(20),
-                              image: const DecorationImage(
-                                image: AssetImage("lib/assets/5.png"),
+                              image: DecorationImage(
+                                image: _avatarProvider(user?["avatar_url"]?.toString()),
                                 fit: BoxFit.cover,
                               ),
                             ),
@@ -361,4 +362,21 @@ class _EmptyHint extends StatelessWidget {
       ),
     );
   }
+}
+
+ImageProvider _avatarProvider(String? dataUrl) {
+  if (dataUrl == null || dataUrl.isEmpty) {
+    return const AssetImage("lib/assets/5.png");
+  }
+  if (dataUrl.startsWith("data:image")) {
+    final idx = dataUrl.indexOf(",");
+    if (idx != -1) {
+      final b64 = dataUrl.substring(idx + 1);
+      return MemoryImage(base64Decode(b64));
+    }
+  }
+  if (dataUrl.startsWith("http")) {
+    return NetworkImage(dataUrl);
+  }
+  return const AssetImage("lib/assets/5.png");
 }

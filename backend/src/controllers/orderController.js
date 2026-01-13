@@ -1,5 +1,5 @@
 const { z } = require("zod");
-const { openDb, get, run } = require("../db/sqlite");
+const { openDb, get, run, all } = require("../db/sqlite");
 const { createPaymentForOrder } = require("./paymentController");
 
 const checkoutSchema = z.object({
@@ -126,4 +126,81 @@ async function confirmPayment(req, res) {
   }
 }
 
-module.exports = { checkout, confirmPayment };
+async function listOrders(req, res) {
+  const status = (req.query.status || "").toString();
+  const db = openDb();
+  try {
+    const params = [req.user.id];
+    let where = "o.user_id = ?";
+    if (status === "processing") {
+      where += " AND o.status IN ('pending','processing')";
+    } else if (status === "history") {
+      where += " AND o.status IN ('paid','completed','canceled')";
+    }
+
+    const rows = await all(
+      db,
+      `
+      SELECT
+        o.id,
+        o.status,
+        o.payment_method,
+        o.delivery_method,
+        o.total,
+        o.created_at,
+        oi.qty,
+        p.id AS product_id,
+        p.name,
+        p.store,
+        p.price,
+        p.image,
+        u.star AS review_star
+      FROM orders o
+      JOIN order_items oi ON oi.order_id = o.id
+      JOIN products p ON p.id = oi.product_id
+      LEFT JOIN ulasan u ON u.product_id = p.id AND u.user_id = o.user_id
+      WHERE ${where}
+      ORDER BY o.id DESC
+      `,
+      params
+    );
+
+    return res.json({ data: rows });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ message: e?.message || "Server error" });
+  } finally {
+    db.close();
+  }
+}
+
+async function cancelOrder(req, res) {
+  const orderId = Number(req.params.id || 0);
+  if (!orderId) return res.status(400).json({ message: "Invalid order id" });
+
+  const db = openDb();
+  try {
+    const row = await get(
+      db,
+      `SELECT id, status FROM orders WHERE id = ? AND user_id = ?`,
+      [orderId, req.user.id]
+    );
+    if (!row) return res.status(404).json({ message: "Order not found" });
+    if (row.status === "canceled") {
+      return res.json({ message: "Order already canceled" });
+    }
+    if (row.status === "paid" || row.status === "completed") {
+      return res.status(400).json({ message: "Order sudah dibayar" });
+    }
+
+    await run(db, `UPDATE orders SET status = 'canceled' WHERE id = ?`, [orderId]);
+    return res.json({ message: "Order canceled" });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ message: e?.message || "Server error" });
+  } finally {
+    db.close();
+  }
+}
+
+module.exports = { checkout, confirmPayment, listOrders, cancelOrder };
