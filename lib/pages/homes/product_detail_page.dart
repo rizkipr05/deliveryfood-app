@@ -118,10 +118,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           cartItems[m.id] = _CartInfo(cartId: info.cartId, qty: info.qty + 1);
         });
       }
-      if (!context.mounted) return;
+      if (!mounted) return;
       _showCartAddedToast();
     } catch (_) {
-      if (!context.mounted) return;
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Gagal menambahkan ke keranjang.")),
       );
@@ -146,7 +146,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         });
       }
     } catch (_) {
-      if (!context.mounted) return;
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Gagal mengurangi item.")),
       );
@@ -248,6 +248,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       );
       if (!mounted) return;
       await _loadReviews();
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Ulasan berhasil ditambahkan.")),
       );
@@ -324,6 +325,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       );
       if (!mounted) return;
       await _loadReviews();
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Ulasan diperbarui.")),
       );
@@ -365,6 +367,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       await ReviewApi.deleteReview(reviewId: review.id);
       if (!mounted) return;
       await _loadReviews();
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Ulasan dihapus.")),
       );
@@ -690,7 +693,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           const SizedBox(height: 14),
 
                           Text(
-                            "${reviewCount} Ulasan & Rating",
+                            "$reviewCount Ulasan & Rating",
                             style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
                           ),
                           const SizedBox(height: 10),
@@ -998,16 +1001,23 @@ class _IconCircle extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       child: Ink(
-        width: 36,
-        height: 36,
+        width: 40,
+        height: 40,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFEAEAEA)),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x33000000),
+              blurRadius: 10,
+              offset: Offset(0, 4),
+            ),
+          ],
         ),
-        child: Icon(icon, color: Colors.black87, size: 18),
+        child: Icon(icon, color: Colors.black87, size: 20),
       ),
     );
   }
@@ -1468,16 +1478,6 @@ String _timeAgo(String iso) {
   if (diff.inDays < 30) return "${(diff.inDays / 7).floor()} Minggu Lalu";
   if (diff.inDays < 365) return "${(diff.inDays / 30).floor()} Bulan Lalu";
   return "${(diff.inDays / 365).floor()} Tahun Lalu";
-}
-
-double _fakeProgress(int star, double rating) {
-  // biar bar rating keliatan bagus walau backend belum kirim distribusi
-  final base = rating / 5.0;
-  if (star == 5) return (base + 0.25).clamp(0.0, 1.0);
-  if (star == 4) return (base + 0.05).clamp(0.0, 1.0);
-  if (star == 3) return (base - 0.10).clamp(0.0, 1.0);
-  if (star == 2) return (base - 0.20).clamp(0.0, 1.0);
-  return (base - 0.28).clamp(0.0, 1.0);
 }
 
 String _formatRupiah(int value) {
