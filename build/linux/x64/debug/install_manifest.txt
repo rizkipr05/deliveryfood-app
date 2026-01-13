@@ -21,6 +21,8 @@
 /home/rizky/Documents/Delivery-app/build/linux/x64/debug/bundle/data/flutter_assets/lib/assets/produk/nasigoreng.png
 /home/rizky/Documents/Delivery-app/build/linux/x64/debug/bundle/data/flutter_assets/lib/assets/3.png
 /home/rizky/Documents/Delivery-app/build/linux/x64/debug/bundle/data/flutter_assets/lib/assets/2.png
+/home/rizky/Documents/Delivery-app/build/linux/x64/debug/bundle/data/flutter_assets/lib/assets/promo/1.png
+/home/rizky/Documents/Delivery-app/build/linux/x64/debug/bundle/data/flutter_assets/lib/assets/promo/2.png
 /home/rizky/Documents/Delivery-app/build/linux/x64/debug/bundle/data/flutter_assets/kernel_blob.bin
 /home/rizky/Documents/Delivery-app/build/linux/x64/debug/bundle/data/flutter_assets/AssetManifest.bin
 /home/rizky/Documents/Delivery-app/build/linux/x64/debug/bundle/data/flutter_assets/NOTICES

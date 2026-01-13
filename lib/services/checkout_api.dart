@@ -23,9 +23,12 @@ class CheckoutApi {
   }
 
   static Future<Map<String, dynamic>> checkout({
-    required int addressId,
+    required int productId,
+    required int qty,
+    required String paymentMethod,
+    required String deliveryMethod,
+    String? address,
     String? note,
-    required List<Map<String, dynamic>> items,
   }) async {
     final headers = await _authHeaders();
     final res = await AppServices.apiClient.post(
@@ -35,9 +38,12 @@ class CheckoutApi {
         "Content-Type": "application/json",
       },
       body: {
-        "address_id": addressId,
+        "product_id": productId,
+        "qty": qty,
+        "payment_method": paymentMethod,
+        "delivery_method": deliveryMethod,
+        "address": (address ?? "").trim(),
         "note": (note ?? "").trim(),
-        "items": items,
       },
     );
     final data = res["data"];
@@ -58,5 +64,14 @@ class CheckoutApi {
       },
       body: {"method": method},
     );
+  }
+
+  static Future<Map<String, dynamic>> paymentStatus({required int orderId}) async {
+    final headers = await _authHeaders();
+    final res = await AppServices.apiClient.get(
+      "/api/payments/$orderId/status",
+      headers: headers,
+    );
+    return res.cast<String, dynamic>();
   }
 }

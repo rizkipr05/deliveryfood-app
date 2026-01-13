@@ -4,8 +4,16 @@ import '../../services/checkout_api.dart';
 class PaymentPage extends StatefulWidget {
   final int orderId;
   final int total;
+  final String method;
+  final String? paymentUrl;
 
-  const PaymentPage({super.key, required this.orderId, required this.total});
+  const PaymentPage({
+    super.key,
+    required this.orderId,
+    required this.total,
+    required this.method,
+    this.paymentUrl,
+  });
 
   @override
   State<PaymentPage> createState() => _PaymentPageState();
@@ -14,13 +22,12 @@ class PaymentPage extends StatefulWidget {
 class _PaymentPageState extends State<PaymentPage> {
   static const kOrange = Color(0xFFFF8A00);
 
-  String method = "ewallet";
   bool loading = false;
 
   Future<void> _confirm() async {
     setState(() => loading = true);
     try {
-      await CheckoutApi.confirmPayment(orderId: widget.orderId, method: method);
+      await CheckoutApi.confirmPayment(orderId: widget.orderId, method: widget.method);
       if (!mounted) return;
       setState(() => loading = false);
 
@@ -77,33 +84,45 @@ class _PaymentPageState extends State<PaymentPage> {
               ],
             ),
           ),
-          const SizedBox(height: 14),
-          const Text(
-            "Metode Pembayaran",
-            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+          const SizedBox(height: 12),
+          _Card(
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    "Metode Pembayaran",
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                  ),
+                ),
+                Text(
+                  widget.method.toUpperCase().replaceAll("_", " "),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    color: kOrange,
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-          _PayTile(
-            active: method == "cash",
-            title: "Cash",
-            subtitle: "Bayar di tempat",
-            icon: Icons.payments_outlined,
-            onTap: () => setState(() => method = "cash"),
-          ),
-          _PayTile(
-            active: method == "ewallet",
-            title: "E-Wallet",
-            subtitle: "OVO / DANA / GoPay",
-            icon: Icons.phone_iphone,
-            onTap: () => setState(() => method = "ewallet"),
-          ),
-          _PayTile(
-            active: method == "bank",
-            title: "Transfer Bank",
-            subtitle: "Virtual Account",
-            icon: Icons.account_balance_outlined,
-            onTap: () => setState(() => method = "bank"),
-          ),
+          if ((widget.paymentUrl ?? "").isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _Card(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Link Pembayaran (Sandbox)",
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                  ),
+                  const SizedBox(height: 6),
+                  SelectableText(
+                    widget.paymentUrl!,
+                    style: TextStyle(color: Colors.grey.shade700, fontSize: 11.5),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
       bottomSheet: SafeArea(
@@ -127,69 +146,6 @@ class _PaymentPageState extends State<PaymentPage> {
               loading ? "Memproses..." : "Konfirmasi",
               style: const TextStyle(fontWeight: FontWeight.w900),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PayTile extends StatelessWidget {
-  static const kOrange = Color(0xFFFF8A00);
-
-  final bool active;
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _PayTile({
-    required this.active,
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Ink(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: active ? kOrange : const Color(0xFFEAEAEA)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: active ? kOrange.withValues(alpha: 0.12) : const Color(0xFFF3F4F6),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: active ? kOrange : Colors.grey, size: 20),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12.8)),
-                    const SizedBox(height: 3),
-                    Text(subtitle, style: TextStyle(color: Colors.grey.shade600, fontSize: 11.5)),
-                  ],
-                ),
-              ),
-              Icon(active ? Icons.check_circle : Icons.circle_outlined,
-                  color: active ? kOrange : Colors.grey.shade400),
-            ],
           ),
         ),
       ),

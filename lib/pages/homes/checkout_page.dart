@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import '../../services/api_client.dart';
 import '../../services/checkout_api.dart';
-import 'payment_page.dart';
+import 'payment_detail_page.dart';
 
 class CheckoutPage extends StatefulWidget {
   final int productId;
   final String name;
+  final String? store;
   final String image;
   final int price;
   final int qty;
@@ -16,6 +18,7 @@ class CheckoutPage extends StatefulWidget {
     required this.image,
     required this.price,
     required this.qty,
+    this.store,
   });
 
   @override
@@ -25,12 +28,12 @@ class CheckoutPage extends StatefulWidget {
 class _CheckoutPageState extends State<CheckoutPage> {
   static const kOrange = Color(0xFFFF8A00);
 
-  bool loading = true;
-  List<Map<String, dynamic>> addresses = [];
-  int? selectedAddressId;
   String deliveryMethod = "pickup";
-  late int qty;
+  String paymentMethod = "qris";
+  int qty = 1;
+  bool submitting = false;
 
+  final addressC = TextEditingController();
   final noteC = TextEditingController();
 
   int get subtotal => widget.price * qty;
@@ -41,76 +44,168 @@ class _CheckoutPageState extends State<CheckoutPage> {
   void initState() {
     super.initState();
     qty = widget.qty;
-    _loadAddresses();
   }
 
   @override
   void dispose() {
+    addressC.dispose();
     noteC.dispose();
     super.dispose();
   }
 
-  Future<void> _loadAddresses() async {
-    setState(() => loading = true);
-    try {
-      final list = await CheckoutApi.listAddresses();
-      if (!mounted) return;
-
-      int? primary;
-      for (final a in list) {
-        if ((a["is_primary"] ?? false) == true) {
-          primary = (a["id"] as num?)?.toInt();
-          break;
-        }
-      }
-
-      setState(() {
-        addresses = list;
-        selectedAddressId = primary ?? ((list.isNotEmpty) ? (list.first["id"] as num).toInt() : null);
-        loading = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => loading = false);
+  String get _paymentLabel {
+    switch (paymentMethod) {
+      case "cash":
+        return "Cash";
+      case "bank_transfer":
+        return "Bank Transfer";
+      default:
+        return "QRIS";
     }
   }
 
   Future<void> _checkout() async {
-    if (selectedAddressId == null) {
+    if (deliveryMethod == "delivery" && addressC.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Pilih alamat dulu.")),
+        const SnackBar(content: Text("Isi alamat pengiriman dulu.")),
       );
       return;
     }
 
+    setState(() => submitting = true);
     try {
       final order = await CheckoutApi.checkout(
-        addressId: selectedAddressId!,
+        productId: widget.productId,
+        qty: qty,
+        paymentMethod: paymentMethod,
+        deliveryMethod: deliveryMethod,
+        address: deliveryMethod == "delivery" ? addressC.text.trim() : "",
         note: noteC.text.trim(),
-        items: [
-          {"product_id": widget.productId, "qty": qty},
-        ],
       );
 
       if (!mounted) return;
 
       final orderId = ((order["id"] ?? 0) as num).toInt();
       final orderTotal = (order["total"] as num?)?.toInt() ?? total;
+      final paymentUrl = (order["payment_url"] ?? "").toString();
+      final paymentQr = (order["payment_qr"] ?? "").toString();
+
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => PaymentPage(
+          builder: (_) => PaymentDetailPage(
             orderId: orderId,
             total: orderTotal,
+            paymentUrl: paymentUrl.isEmpty ? null : paymentUrl,
+            paymentQr: paymentQr.isEmpty ? null : paymentQr,
+            method: paymentMethod,
+            merchantName: widget.store ?? "Warung Pak Tri",
+            deliveryMethod: deliveryMethod,
           ),
         ),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
       );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Checkout gagal. Cek endpoint backend.")),
       );
+    } finally {
+      if (mounted) setState(() => submitting = false);
     }
+  }
+
+  void _openPaymentSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (ctx) {
+        String temp = paymentMethod;
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      "Payment Method",
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "Your security and privacy are protected",
+                      style: TextStyle(color: Colors.orange.shade700, fontSize: 11),
+                    ),
+                    const SizedBox(height: 14),
+                    _PayTile(
+                      title: "Cash",
+                      icon: Icons.payments_outlined,
+                      active: temp == "cash",
+                      onTap: () => setLocal(() => temp = "cash"),
+                    ),
+                    _PayTile(
+                      title: "QRIS",
+                      icon: Icons.qr_code_rounded,
+                      active: temp == "qris",
+                      onTap: () => setLocal(() => temp = "qris"),
+                    ),
+                    _PayTile(
+                      title: "Bank Transfer",
+                      icon: Icons.account_balance_outlined,
+                      active: temp == "bank_transfer",
+                      onTap: () => setLocal(() => temp = "bank_transfer"),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFFFA200), Color(0xFFFF3B30)],
+                          ),
+                        ),
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          onPressed: () {
+                            setState(() => paymentMethod = temp);
+                            Navigator.pop(ctx);
+                          },
+                          child: const Text(
+                            "Melanjutkan",
+                            style: TextStyle(
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -130,182 +225,148 @@ class _CheckoutPageState extends State<CheckoutPage> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: SafeArea(
-        child: loading
-            ? const Center(child: CircularProgressIndicator())
-            : ListView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
-                children: [
-                  const Text(
-                    "Pesanan",
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
-                  ),
-                  const SizedBox(height: 10),
-
-                  _Card(
-                    child: Row(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.asset(
-                            widget.image,
-                            width: 56,
-                            height: 56,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Container(width: 56, height: 56, color: Colors.grey.shade200),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                widget.name,
-                                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12.8),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _formatRupiah(widget.price),
-                                style: const TextStyle(
-                                  color: Color(0xFFFF3B30),
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 12.2,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        _QtyPicker(
-                          qty: qty,
-                          onMinus: () => setState(() {
-                            if (qty > 1) qty--;
-                          }),
-                          onPlus: () => setState(() => qty++),
-                        ),
-                      ],
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+        children: [
+          _SectionTitle("Pesanan"),
+          const SizedBox(height: 10),
+          _Card(
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.asset(
+                    widget.image,
+                    width: 56,
+                    height: 56,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      width: 56,
+                      height: 56,
+                      color: Colors.grey.shade200,
+                      child: const Icon(Icons.image_not_supported, size: 18),
                     ),
                   ),
-
-                  const SizedBox(height: 14),
-
-                  const Text(
-                    "Metode Pengantaran",
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
-                  ),
-                  const SizedBox(height: 10),
-
-                  _Card(
-                    child: Row(
-                      children: [
-                        _SelectChip(
-                          active: deliveryMethod == "pickup",
-                          label: "Pickup",
-                          onTap: () => setState(() => deliveryMethod = "pickup"),
-                        ),
-                        const SizedBox(width: 10),
-                        _SelectChip(
-                          active: deliveryMethod == "delivery",
-                          label: "Delivery",
-                          onTap: () => setState(() => deliveryMethod = "delivery"),
-                        ),
-                        const Spacer(),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.name,
+                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                      ),
+                      const SizedBox(height: 3),
+                      if ((widget.store ?? "").isNotEmpty)
                         Text(
-                          deliveryMethod == "delivery" ? _formatRupiah(deliveryFee) : "Gratis",
-                          style: TextStyle(
-                            color: Colors.grey.shade700,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 11.5,
-                          ),
+                          widget.store!,
+                          style: TextStyle(color: Colors.orange.shade700, fontSize: 11.5),
                         ),
-                      ],
+                    ],
+                  ),
+                ),
+                _QtyPicker(
+                  qty: qty,
+                  onMinus: () => setState(() {
+                    if (qty > 1) qty--;
+                  }),
+                  onPlus: () => setState(() => qty++),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          _Card(
+            child: InkWell(
+              onTap: _openPaymentSheet,
+              borderRadius: BorderRadius.circular(12),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      "Metode Pembayaran",
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
                     ),
                   ),
-
-                  const SizedBox(height: 14),
-
-                  const Text(
-                    "Alamat Pengiriman",
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
-                  ),
-                  const SizedBox(height: 10),
-
-                  if (addresses.isEmpty)
-                    _Card(
-                      child: Text(
-                        "Belum ada alamat. Buat alamat dulu di Profile.",
-                        style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                      ),
-                    )
-                  else
-                    ...addresses.map((a) {
-                      final id = (a["id"] as num).toInt();
-                      final title = (a["title"] ?? "-").toString();
-                      final detail = (a["detail"] ?? "-").toString();
-
-                      final active = id == selectedAddressId;
-
-                      return _SelectTile(
-                        active: active,
-                        title: title,
-                        detail: detail,
-                        onTap: () => setState(() => selectedAddressId = id),
-                      );
-                    }),
-
-                  const SizedBox(height: 14),
-
-                  const Text(
-                    "Catatan Pesanan (Opsional)",
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
-                  ),
-                  const SizedBox(height: 10),
-
-                  TextField(
-                    controller: noteC,
-                    decoration: InputDecoration(
-                      hintText: "Contoh: tanpa sambal, ya",
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: Color(0xFFEAEAEA)),
-                      ),
+                  Text(
+                    _paymentLabel,
+                    style: const TextStyle(
+                      color: kOrange,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12.5,
                     ),
                   ),
-
-                  const SizedBox(height: 14),
-
-                  const Text(
-                    "Detail Pembayaran",
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
-                  ),
-                  const SizedBox(height: 10),
-
-                  _Card(
-                    child: Column(
-                      children: [
-                        _RowPrice(label: "Subtotal", value: _formatRupiah(subtotal)),
-                        const SizedBox(height: 8),
-                        _RowPrice(label: "Ongkir", value: _formatRupiah(deliveryFee)),
-                        const SizedBox(height: 10),
-                        const Divider(height: 1),
-                        const SizedBox(height: 10),
-                        _RowPrice(
-                          label: "Total",
-                          value: _formatRupiah(total),
-                          bold: true,
-                        ),
-                      ],
-                    ),
-                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.chevron_right, color: Colors.grey),
                 ],
               ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _MethodChip(
+                label: "Pick Up",
+                active: deliveryMethod == "pickup",
+                onTap: () => setState(() => deliveryMethod = "pickup"),
+              ),
+              const SizedBox(width: 10),
+              _MethodChip(
+                label: "Delivery",
+                active: deliveryMethod == "delivery",
+                onTap: () => setState(() => deliveryMethod = "delivery"),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _SectionTitle("Detail Pembayaran"),
+          const SizedBox(height: 10),
+          _Card(
+            child: Column(
+              children: [
+                _RowPrice(label: "Subtotal Produk", value: _formatRupiah(subtotal)),
+                const SizedBox(height: 8),
+                _RowPrice(label: "Biaya Layanan", value: _formatRupiah(deliveryFee)),
+                const SizedBox(height: 10),
+                const Divider(height: 1),
+                const SizedBox(height: 10),
+                _RowPrice(
+                  label: "Total Pembayaran",
+                  value: _formatRupiah(total),
+                  bold: true,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (deliveryMethod == "delivery") ...[
+            _SectionTitle("Alamat Pengiriman"),
+            const SizedBox(height: 10),
+            _Card(
+              child: TextField(
+                controller: addressC,
+                decoration: const InputDecoration(
+                  hintText: "Contoh: Gedung A, Lantai 2, Ruangan 201",
+                  border: InputBorder.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
+          _SectionTitle("Catatan Pesanan (Opsional)"),
+          const SizedBox(height: 10),
+          _Card(
+            child: TextField(
+              controller: noteC,
+              decoration: const InputDecoration(
+                hintText: "Contoh: Tidak pakai sambel...",
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+        ],
       ),
-
       bottomSheet: SafeArea(
         top: false,
         child: Container(
@@ -314,16 +375,32 @@ class _CheckoutPageState extends State<CheckoutPage> {
             color: Colors.white,
             border: Border(top: BorderSide(color: Color(0xFFEAEAEA))),
           ),
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: kOrange,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          child: SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFFA200), Color(0xFFFF3B30)],
+                ),
+              ),
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onPressed: submitting ? null : _checkout,
+                child: Text(
+                  submitting ? "Memproses..." : "Bayar Sekarang",
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
             ),
-            onPressed: _checkout,
-            child: const Text("Bayar Sekarang", style: TextStyle(fontWeight: FontWeight.w900)),
           ),
         ),
       ),
@@ -331,81 +408,27 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 }
 
-class _SelectTile extends StatelessWidget {
-  static const kOrange = Color(0xFFFF8A00);
-
-  final bool active;
-  final String title;
-  final String detail;
-  final VoidCallback onTap;
-
-  const _SelectTile({
-    required this.active,
-    required this.title,
-    required this.detail,
-    required this.onTap,
-  });
+class _SectionTitle extends StatelessWidget {
+  final String text;
+  const _SectionTitle(this.text);
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Ink(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: active ? kOrange : const Color(0xFFEAEAEA)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: active ? kOrange.withValues(alpha: 0.12) : const Color(0xFFF3F4F6),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  Icons.location_on_outlined,
-                  size: 18,
-                  color: active ? kOrange : Colors.grey,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12.5)),
-                    const SizedBox(height: 3),
-                    Text(detail, style: TextStyle(color: Colors.grey.shade600, fontSize: 11.5)),
-                  ],
-                ),
-              ),
-              Icon(active ? Icons.check_circle : Icons.circle_outlined,
-                  color: active ? kOrange : Colors.grey.shade400),
-            ],
-          ),
-        ),
-      ),
+    return Text(
+      text,
+      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
     );
   }
 }
 
-class _SelectChip extends StatelessWidget {
-  static const kOrange = Color(0xFFFF8A00);
-
-  final bool active;
+class _MethodChip extends StatelessWidget {
   final String label;
+  final bool active;
   final VoidCallback onTap;
 
-  const _SelectChip({
-    required this.active,
+  const _MethodChip({
     required this.label,
+    required this.active,
     required this.onTap,
   });
 
@@ -415,19 +438,74 @@ class _SelectChip extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: active ? kOrange : Colors.white,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: active ? kOrange : const Color(0xFFEAEAEA)),
+          border: Border.all(color: active ? const Color(0xFFFF8A00) : const Color(0xFFEAEAEA)),
         ),
         child: Text(
           label,
           style: TextStyle(
-            fontSize: 11.5,
+            color: active ? const Color(0xFFFF8A00) : Colors.grey.shade600,
             fontWeight: FontWeight.w800,
-            color: active ? Colors.white : Colors.grey.shade700,
+            fontSize: 12,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PayTile extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _PayTile({
+    required this.title,
+    required this.icon,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFEAEAEA)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF2E8),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: const Color(0xFFFF8A00), size: 20),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12.8),
+              ),
+            ),
+            Icon(
+              active ? Icons.radio_button_checked : Icons.radio_button_off,
+              color: active ? const Color(0xFFFF8A00) : Colors.grey.shade400,
+            ),
+          ],
         ),
       ),
     );
@@ -445,53 +523,58 @@ class _QtyPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFEAEAEA)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _MiniBtn(icon: Icons.remove, onTap: onMinus),
-          const SizedBox(width: 8),
-          Text(
-            "$qty",
-            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12.5),
+    return Row(
+      children: [
+        InkWell(
+          onTap: onMinus,
+          borderRadius: BorderRadius.circular(10),
+          child: const Padding(
+            padding: EdgeInsets.all(4),
+            child: Text(
+              "−",
+              style: TextStyle(
+                color: kOrange,
+                fontWeight: FontWeight.w900,
+                fontSize: 16,
+              ),
+            ),
           ),
-          const SizedBox(width: 8),
-          _MiniBtn(icon: Icons.add, onTap: onPlus, active: true),
-        ],
-      ),
-    );
-  }
-}
-
-class _MiniBtn extends StatelessWidget {
-  static const kOrange = Color(0xFFFF8A00);
-
-  final IconData icon;
-  final VoidCallback onTap;
-  final bool active;
-
-  const _MiniBtn({required this.icon, required this.onTap, this.active = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Ink(
-        width: 26,
-        height: 26,
-        decoration: BoxDecoration(
-          color: active ? kOrange.withValues(alpha: 0.12) : const Color(0xFFF4F5F7),
-          borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(icon, size: 16, color: active ? kOrange : Colors.black87),
-      ),
+        const SizedBox(width: 6),
+        Container(
+          width: 24,
+          height: 24,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(
+            color: kOrange,
+            shape: BoxShape.circle,
+          ),
+          child: Text(
+            "$qty",
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 11,
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        InkWell(
+          onTap: onPlus,
+          borderRadius: BorderRadius.circular(10),
+          child: const Padding(
+            padding: EdgeInsets.all(4),
+            child: Text(
+              "+",
+              style: TextStyle(
+                color: kOrange,
+                fontWeight: FontWeight.w900,
+                fontSize: 16,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -523,9 +606,9 @@ class _RowPrice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = TextStyle(
-      fontWeight: bold ? FontWeight.w900 : FontWeight.w800,
+      fontWeight: bold ? FontWeight.w900 : FontWeight.w700,
       color: bold ? Colors.black : Colors.grey.shade700,
-      fontSize: bold ? 13 : 12.2,
+      fontSize: bold ? 13 : 12,
     );
 
     return Row(

@@ -175,6 +175,7 @@ class _CartPageState extends State<CartPage> {
                             builder: (_) => CheckoutPage(
                               productId: first.productId,
                               name: first.name,
+                              store: first.store,
                               image: first.image,
                               price: first.price,
                               qty: first.qty,

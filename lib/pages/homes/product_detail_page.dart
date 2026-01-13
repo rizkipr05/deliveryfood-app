@@ -962,6 +962,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                   builder: (_) => CheckoutPage(
                                     productId: widget.productId,
                                     name: name,
+                                    store: store,
                                     image: image,
                                     price: isPromo ? promoPrice : oldPrice,
                                     qty: qty,

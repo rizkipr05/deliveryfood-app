@@ -10,6 +10,7 @@
         "cupertino_icons",
         "flutter",
         "http",
+        "qr_flutter",
         "shared_preferences"
       ],
       "devDependencies": [
@@ -58,6 +59,14 @@
         "shared_preferences_platform_interface",
         "shared_preferences_web",
         "shared_preferences_windows"
+      ]
+    },
+    {
+      "name": "qr_flutter",
+      "version": "4.1.0",
+      "dependencies": [
+        "flutter",
+        "qr"
       ]
     },
     {
@@ -227,6 +236,13 @@
       "dependencies": [
         "flutter",
         "shared_preferences_platform_interface"
+      ]
+    },
+    {
+      "name": "qr",
+      "version": "3.0.2",
+      "dependencies": [
+        "meta"
       ]
     },
     {

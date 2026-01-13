@@ -83,6 +83,56 @@ const bcrypt = require("bcryptjs");
       `
     );
 
+    await run(
+      db,
+      `
+      CREATE TABLE IF NOT EXISTS orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        payment_method TEXT NOT NULL,
+        payment_status TEXT NOT NULL DEFAULT 'pending',
+        payment_token TEXT,
+        payment_url TEXT,
+        payment_qr TEXT,
+        delivery_method TEXT NOT NULL,
+        address TEXT,
+        note TEXT,
+        subtotal INTEGER NOT NULL,
+        delivery_fee INTEGER NOT NULL DEFAULT 0,
+        total INTEGER NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+      `
+    );
+
+    const orderColumns = await all(db, `PRAGMA table_info(orders)`);
+    const hasOrderCol = (name) => orderColumns.some((c) => c.name === name);
+    if (!hasOrderCol("payment_qr")) {
+      await run(db, `ALTER TABLE orders ADD COLUMN payment_qr TEXT`);
+    }
+    if (!hasOrderCol("midtrans_order_id")) {
+      await run(db, `ALTER TABLE orders ADD COLUMN midtrans_order_id TEXT`);
+    }
+
+    await run(
+      db,
+      `
+      CREATE TABLE IF NOT EXISTS order_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL,
+        qty INTEGER NOT NULL,
+        price INTEGER NOT NULL,
+        promo_price INTEGER,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE,
+        FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE
+      );
+      `
+    );
+
     // Seed products jika masih kosong
     const pCount = await get(db, `SELECT COUNT(*) as c FROM products`);
     if ((pCount?.c ?? 0) === 0) {
