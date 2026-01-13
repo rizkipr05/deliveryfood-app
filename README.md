@@ -44,6 +44,23 @@ flutter pub get
 flutter run
 ```
 
+## Cara Bikin (Ringkas)
+1) **Bootstrap Flutter app**
+   - `flutter create delivery_app`
+   - Atur UI halaman: home, detail, cart, checkout, payment, activity, profile.
+2) **Buat backend Express**
+   - Init: `npm init -y`, install `express`, `sqlite3`, `dotenv`, `jsonwebtoken`, `zod`, `midtrans-client`, dll.
+   - Buat struktur `backend/src` + routes/controllers.
+3) **Database SQLite**
+   - Tambahkan migrasi: products, users, orders, order_items, cart_items, ulasan, promos, addresses.
+   - Jalankan `npm run migrate` untuk create table.
+4) **Integrasi API di Flutter**
+   - Buat service layer (`lib/services/*`) untuk auth, products, cart, orders, reviews.
+   - Set base URL di `lib/services/app_services.dart` (port harus sesuai backend).
+5) **Payment QRIS**
+   - Simpan key di `backend/.env`.
+   - Generate QR lewat Midtrans sandbox dan tampilkan QR di UI.
+
 ## Struktur Folder (Ringkas)
 - `lib/` → UI Flutter & logic app
 - `backend/src/` → API, database, dan logic server
@@ -52,3 +69,4 @@ flutter run
 ## Catatan
 - Gunakan Midtrans sandbox untuk testing QRIS.
 - Jika ada error asset gambar, cek path di `pubspec.yaml`.
+- Jika backend port berbeda, sesuaikan `PORT` di `.env` **dan** base URL di `lib/services/app_services.dart`.
