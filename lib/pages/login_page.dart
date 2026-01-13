@@ -59,17 +59,16 @@ class _LoginPageState extends State<LoginPage>
       );
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error: $e")));
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -78,10 +77,12 @@ class _LoginPageState extends State<LoginPage>
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+          padding: const EdgeInsets.all(18),
           child: Column(
             children: [
               const SizedBox(height: 12),
+
+              // Logo
               Center(
                 child: Container(
                   width: 72,
@@ -90,17 +91,18 @@ class _LoginPageState extends State<LoginPage>
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(22),
-                    boxShadow: [
+                    boxShadow: const [
                       BoxShadow(
                         color: Color.fromARGB(15, 0, 0, 0),
                         blurRadius: 16,
-                        offset: const Offset(0, 8),
+                        offset: Offset(0, 8),
                       ),
                     ],
                   ),
                   child: Image.asset("lib/assets/4.png"),
                 ),
               ),
+
               const SizedBox(height: 14),
               const Text(
                 "Mulailah sekarang",
@@ -110,12 +112,12 @@ class _LoginPageState extends State<LoginPage>
               Text(
                 "Buat akun atau masuk untuk\nmenjelajahi aplikasi kami",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade600, height: 1.3),
+                style: TextStyle(color: Colors.grey.shade600),
               ),
 
               const SizedBox(height: 14),
 
-              // Tab Masuk/Daftar
+              // Tab Masuk / Daftar
               Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
@@ -131,11 +133,10 @@ class _LoginPageState extends State<LoginPage>
                       _tab.index = 0;
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) => const RegisterPage(),
-                        ),
+                        MaterialPageRoute(builder: (_) => const RegisterPage()),
                       );
                     },
+                    overlayColor: WidgetStateProperty.all(Colors.transparent),
                     indicatorSize: TabBarIndicatorSize.tab,
                     indicatorPadding: EdgeInsets.zero,
                     labelPadding: EdgeInsets.zero,
@@ -157,6 +158,7 @@ class _LoginPageState extends State<LoginPage>
 
               const SizedBox(height: 14),
 
+              // Email
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -173,15 +175,12 @@ class _LoginPageState extends State<LoginPage>
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
                 ),
               ),
 
               const SizedBox(height: 12),
 
+              // Password
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -198,10 +197,6 @@ class _LoginPageState extends State<LoginPage>
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
                   suffixIcon: IconButton(
                     onPressed: () => setState(() => obscure = !obscure),
                     icon: Icon(
@@ -213,6 +208,7 @@ class _LoginPageState extends State<LoginPage>
 
               const SizedBox(height: 10),
 
+              // Remember + Forgot
               Row(
                 children: [
                   Checkbox(
@@ -250,7 +246,6 @@ class _LoginPageState extends State<LoginPage>
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: orange,
-                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
@@ -262,67 +257,8 @@ class _LoginPageState extends State<LoginPage>
                   ),
                 ),
               ),
-
-              const SizedBox(height: 14),
-
-              Text(
-                "Atau masuk dengan",
-                style: TextStyle(color: Colors.grey.shade600),
-              ),
-              const SizedBox(height: 12),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: _SocialButton(
-                      text: "Google",
-                      icon: Icons.g_mobiledata, // bisa ganti pakai image icon
-                      onTap: () {},
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _SocialButton(
-                      text: "Apple",
-                      icon: Icons.apple,
-                      onTap: () {},
-                    ),
-                  ),
-                ],
-              ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SocialButton extends StatelessWidget {
-  final String text;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _SocialButton({
-    required this.text,
-    required this.icon,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 46,
-      child: OutlinedButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon),
-        label: Text(text, style: const TextStyle(fontWeight: FontWeight.w700)),
-        style: OutlinedButton.styleFrom(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          side: BorderSide(color: Colors.grey.shade300),
-          foregroundColor: Colors.black,
         ),
       ),
     );

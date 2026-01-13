@@ -25,6 +25,7 @@ async function getUlasans(req, res) {
         ul.id,
         ul.user_id,
         u.name,
+        u.avatar_url,
         ul.star,
         ul.comment,
         ul.created_at

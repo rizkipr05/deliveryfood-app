@@ -11,6 +11,7 @@ const ulasanRoutes = require("./routes/ulasanRoutes");
 const promoRoutes = require("./routes/promoRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const userRoutes = require("./routes/userRoutes");
+const addressRoutes = require("./routes/addressRoutes");
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use("/api", ulasanRoutes);
 app.use("/api", promoRoutes);
 app.use("/api", orderRoutes);
 app.use("/api", userRoutes);
+app.use("/api", addressRoutes);
 
 app.use((req, res) => res.status(404).json({ message: "Not Found" }));
 

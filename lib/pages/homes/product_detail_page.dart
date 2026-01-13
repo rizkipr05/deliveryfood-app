@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../../services/app_services.dart';
 import '../../services/cart_api.dart';
@@ -1297,6 +1298,7 @@ class _Review {
   final int id;
   final int userId;
   final String name;
+  final String avatarUrl;
   final int star;
   final String comment;
   final String createdAt;
@@ -1305,6 +1307,7 @@ class _Review {
     required this.id,
     required this.userId,
     required this.name,
+    required this.avatarUrl,
     required this.star,
     required this.comment,
     required this.createdAt,
@@ -1315,6 +1318,7 @@ class _Review {
       id: ((m["id"] ?? 0) as num).toInt(),
       userId: ((m["user_id"] ?? 0) as num).toInt(),
       name: (m["name"] ?? "User").toString(),
+      avatarUrl: (m["avatar_url"] ?? "").toString(),
       star: ((m["star"] ?? 5) as num).toInt(),
       comment: (m["comment"] ?? "").toString(),
       createdAt: (m["created_at"] ?? "").toString(),
@@ -1357,12 +1361,7 @@ class _ReviewTile extends StatelessWidget {
                   color: const Color(0xFFF3F4F6),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Center(
-                  child: Text(
-                    r.name.isEmpty ? "U" : r.name[0].toUpperCase(),
-                    style: const TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                ),
+                child: _ReviewAvatar(avatarUrl: r.avatarUrl, fallbackText: r.name),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -1409,6 +1408,48 @@ class _ReviewTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ReviewAvatar extends StatelessWidget {
+  final String avatarUrl;
+  final String fallbackText;
+
+  const _ReviewAvatar({
+    required this.avatarUrl,
+    required this.fallbackText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = _reviewAvatarProvider(avatarUrl);
+    if (provider == null) {
+      return Center(
+        child: Text(
+          fallbackText.isEmpty ? "U" : fallbackText[0].toUpperCase(),
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Image(image: provider, fit: BoxFit.cover),
+    );
+  }
+}
+
+ImageProvider? _reviewAvatarProvider(String? dataUrl) {
+  if (dataUrl == null || dataUrl.isEmpty) return null;
+  if (dataUrl.startsWith("data:image")) {
+    final idx = dataUrl.indexOf(",");
+    if (idx != -1) {
+      final b64 = dataUrl.substring(idx + 1);
+      return MemoryImage(base64Decode(b64));
+    }
+  }
+  if (dataUrl.startsWith("http")) {
+    return NetworkImage(dataUrl);
+  }
+  return null;
 }
 
 String _timeAgo(String iso) {
