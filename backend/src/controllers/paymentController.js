@@ -17,6 +17,7 @@ async function createPaymentForOrder({
   userId,
   total,
   paymentMethod,
+  bankCode,
   itemName,
 }) {
   const cfg = midtransConfig();
@@ -25,10 +26,22 @@ async function createPaymentForOrder({
     const payment_url = `https://sandbox.example/pay/${orderId}`;
     await run(
       db,
-      `UPDATE orders SET payment_url = ?, payment_method = ? WHERE id = ?`,
+      `UPDATE orders
+       SET payment_url = ?, payment_method = ?, bank_code = NULL, va_number = NULL, va_expired_at = NULL,
+           biller_code = NULL, bill_key = NULL
+       WHERE id = ?`,
       [payment_url, paymentMethod, orderId]
     );
-    return { payment_url, payment_token: null, payment_qr: null };
+    return {
+      payment_url,
+      payment_token: null,
+      payment_qr: null,
+      bank_code: null,
+      va_number: null,
+      va_expired_at: null,
+      biller_code: null,
+      bill_key: null,
+    };
   }
 
   const orderIdStr = `ORDER-${orderId}-${Date.now()}`;
@@ -63,12 +76,128 @@ async function createPaymentForOrder({
     await run(
       db,
       `UPDATE orders
-       SET payment_url = ?, payment_qr = ?, payment_method = ?, midtrans_order_id = ?
+       SET payment_url = ?, payment_qr = ?, payment_method = ?, midtrans_order_id = ?,
+           bank_code = NULL, va_number = NULL, va_expired_at = NULL,
+           biller_code = NULL, bill_key = NULL
        WHERE id = ?`,
       [actionUrl, qrString, paymentMethod, orderIdStr, orderId]
     );
 
-    return { payment_url: actionUrl, payment_token: null, payment_qr: qrString };
+    return {
+      payment_url: actionUrl,
+      payment_token: null,
+      payment_qr: qrString,
+      bank_code: null,
+      va_number: null,
+      va_expired_at: null,
+      biller_code: null,
+      bill_key: null,
+    };
+  }
+
+  if (paymentMethod === "bank_transfer") {
+    const bank = (bankCode || "bca").toString().trim().toLowerCase() || "bca";
+    const core = new midtransClient.CoreApi({
+      isProduction: cfg.isProduction,
+      serverKey: cfg.serverKey,
+      clientKey: cfg.clientKey,
+    });
+
+    let chargeRes = null;
+    if (bank === "mandiri") {
+      chargeRes = await core.charge({
+        payment_type: "echannel",
+        transaction_details: {
+          order_id: orderIdStr,
+          gross_amount: total,
+        },
+        item_details: [
+          {
+            id: `product-${orderId}`,
+            name: itemName || "Order",
+            quantity: 1,
+            price: total,
+          },
+        ],
+        echannel: {
+          bill_info1: "Payment",
+          bill_info2: "Online",
+        },
+      });
+    } else {
+      chargeRes = await core.charge({
+        payment_type: "bank_transfer",
+        transaction_details: {
+          order_id: orderIdStr,
+          gross_amount: total,
+        },
+        item_details: [
+          {
+            id: `product-${orderId}`,
+            name: itemName || "Order",
+            quantity: 1,
+            price: total,
+          },
+        ],
+        bank_transfer: { bank },
+      });
+    }
+
+    const vaNumbers = Array.isArray(chargeRes?.va_numbers) ? chargeRes.va_numbers : [];
+    let bankCodeResp = null;
+    let vaNumber = null;
+    if (vaNumbers.length > 0) {
+      bankCodeResp = vaNumbers[0]?.bank || null;
+      vaNumber = vaNumbers[0]?.va_number || null;
+    }
+    if (!vaNumber && chargeRes?.permata_va_number) {
+      bankCodeResp = bankCodeResp || "permata";
+      vaNumber = chargeRes.permata_va_number;
+    }
+    if (!vaNumber && chargeRes?.bca_va_number) {
+      bankCodeResp = bankCodeResp || "bca";
+      vaNumber = chargeRes.bca_va_number;
+    }
+    if (!vaNumber && chargeRes?.bni_va_number) {
+      bankCodeResp = bankCodeResp || "bni";
+      vaNumber = chargeRes.bni_va_number;
+    }
+    if (!vaNumber && chargeRes?.bri_va_number) {
+      bankCodeResp = bankCodeResp || "bri";
+      vaNumber = chargeRes.bri_va_number;
+    }
+    const vaExpiredAt = chargeRes?.expiry_time || null;
+    const billerCode = chargeRes?.biller_code || null;
+    const billKey = chargeRes?.bill_key || null;
+
+    await run(
+      db,
+      `UPDATE orders
+       SET payment_url = NULL, payment_qr = NULL, payment_method = ?, midtrans_order_id = ?,
+           bank_code = ?, va_number = ?, va_expired_at = ?, biller_code = ?, bill_key = ?
+       WHERE id = ?`,
+      [
+        paymentMethod,
+        orderIdStr,
+        bankCodeResp || bank,
+        vaNumber,
+        vaExpiredAt,
+        billerCode,
+        billKey,
+        orderId,
+      ]
+    );
+
+    return {
+      payment_url: null,
+      payment_token: null,
+      payment_qr: null,
+      bank_code: bankCodeResp || bank,
+      va_number: vaNumber,
+      va_expired_at: vaExpiredAt,
+      biller_code: billerCode,
+      bill_key: billKey,
+    };
   }
 
   const snap = new midtransClient.Snap({
@@ -102,17 +231,29 @@ async function createPaymentForOrder({
   await run(
     db,
     `UPDATE orders
-     SET payment_token = ?, payment_url = ?, payment_method = ?, midtrans_order_id = ?
+     SET payment_token = ?, payment_url = ?, payment_method = ?, midtrans_order_id = ?,
+         bank_code = NULL, va_number = NULL, va_expired_at = NULL,
+         biller_code = NULL, bill_key = NULL
      WHERE id = ?`,
     [res.token, res.redirect_url, paymentMethod, orderIdStr, orderId]
   );
 
-  return { payment_url: res.redirect_url, payment_token: res.token, payment_qr: null };
+  return {
+    payment_url: res.redirect_url,
+    payment_token: res.token,
+    payment_qr: null,
+    bank_code: null,
+    va_number: null,
+    va_expired_at: null,
+    biller_code: null,
+    bill_key: null,
+  };
 }
 
 async function createPayment(req, res) {
   const orderId = Number(req.body.order_id || 0);
   const paymentMethod = (req.body.payment_method || "").toString();
+  const bankCode = (req.body.bank_code || "").toString();
   if (!orderId || !paymentMethod) {
     return res.status(400).json({ message: "Invalid payload" });
   }
@@ -135,6 +276,7 @@ async function createPayment(req, res) {
       userId: row.user_id,
       total: row.total,
       paymentMethod,
+      bankCode,
       itemName: "Order",
     });
 

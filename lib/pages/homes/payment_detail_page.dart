@@ -11,6 +11,11 @@ class PaymentDetailPage extends StatefulWidget {
   final String method;
   final String? paymentUrl;
   final String? paymentQr;
+  final String? bankCode;
+  final String? vaNumber;
+  final String? vaExpiredAt;
+  final String? billerCode;
+  final String? billKey;
   final String merchantName;
   final String deliveryMethod;
 
@@ -21,6 +26,11 @@ class PaymentDetailPage extends StatefulWidget {
     required this.method,
     this.paymentUrl,
     this.paymentQr,
+    this.bankCode,
+    this.vaNumber,
+    this.vaExpiredAt,
+    this.billerCode,
+    this.billKey,
     this.merchantName = "Warung Pak Tri",
     this.deliveryMethod = "pickup",
   });
@@ -70,7 +80,9 @@ class _PaymentDetailPageState extends State<PaymentDetailPage> {
   String get _methodLabel {
     switch (widget.method) {
       case "bank_transfer":
-        return "Bank Transfer";
+        final code = (widget.bankCode ?? "").trim();
+        if (code == "mandiri") return "Mandiri Bill Payment";
+        return code.isEmpty ? "Virtual Account" : "Virtual Account (${code.toUpperCase()})";
       case "cash":
         return "Cash";
       default:
@@ -107,6 +119,9 @@ class _PaymentDetailPageState extends State<PaymentDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isBankTransfer = widget.method == "bank_transfer";
+    final isCash = widget.method == "cash";
+    final isMandiri = (widget.bankCode ?? "") == "mandiri";
     final qrData = (widget.paymentQr ?? "").isNotEmpty
         ? widget.paymentQr!
         : (widget.paymentUrl ?? "");
@@ -182,110 +197,249 @@ class _PaymentDetailPageState extends State<PaymentDetailPage> {
             ),
           ),
           const SizedBox(height: 12),
-          Text(
-            "Scan barcode di bawah ini menggunakan aplikasi Bank/E-Wallet pilihan Anda. Pastikan nama merchant adalah ${widget.merchantName}.",
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey.shade700, fontSize: 11.5),
-          ),
-          const SizedBox(height: 12),
-          if (qrData.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF5EC),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFFF6A3D), width: 2),
-              ),
+          if (isBankTransfer) ...[
+            Text(
+              isMandiri
+                  ? "Gunakan Biller Code dan Bill Key di bawah ini sebelum batas waktu habis."
+                  : "Transfer ke Virtual Account di bawah ini sebelum batas waktu habis. Pastikan nominal sesuai.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade700, fontSize: 11.5),
+            ),
+            const SizedBox(height: 12),
+            _Card(
               child: Column(
                 children: [
-                  QrImageView(
-                    data: qrData,
-                    size: 200,
-                  ),
-                  const SizedBox(height: 8),
                   Text(
-                    "Merchant: ${widget.merchantName}",
-                    style: TextStyle(color: Colors.grey.shade700, fontSize: 11.5),
+                    widget.bankCode == null || widget.bankCode!.isEmpty
+                        ? (isMandiri ? "Mandiri Bill" : "Virtual Account")
+                        : widget.bankCode!.toUpperCase(),
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12.5),
                   ),
                   const SizedBox(height: 6),
-                  Text(
-                    "Gunakan aplikasi yang mendukung QRIS\n(Gojek, Dana, Mobile Banking).",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey.shade700, fontSize: 11),
-                  ),
-                  if ((widget.paymentUrl ?? "").isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      onPressed: () async {
-                        await Clipboard.setData(
-                          ClipboardData(text: widget.paymentUrl!),
-                        );
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Link QR disalin.")),
-                        );
-                      },
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFFFF8A00)),
-                        foregroundColor: const Color(0xFFFF8A00),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
+                  if (isMandiri) ...[
+                    _ValuePair(
+                      label: "Biller Code",
+                      value: widget.billerCode ?? "-",
+                    ),
+                    const SizedBox(height: 6),
+                    _ValuePair(
+                      label: "Bill Key",
+                      value: widget.billKey ?? "-",
+                    ),
+                    const SizedBox(height: 8),
+                    if ((widget.billerCode ?? "").isNotEmpty || (widget.billKey ?? "").isNotEmpty)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if ((widget.billerCode ?? "").isNotEmpty)
+                            OutlinedButton.icon(
+                              onPressed: () async {
+                                await Clipboard.setData(
+                                  ClipboardData(text: widget.billerCode!),
+                                );
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text("Biller Code disalin.")),
+                                );
+                              },
+                              icon: const Icon(Icons.copy, size: 16),
+                              label: const Text("Salin Biller"),
+                            ),
+                          if ((widget.billerCode ?? "").isNotEmpty &&
+                              (widget.billKey ?? "").isNotEmpty)
+                            const SizedBox(width: 8),
+                          if ((widget.billKey ?? "").isNotEmpty)
+                            OutlinedButton.icon(
+                              onPressed: () async {
+                                await Clipboard.setData(
+                                  ClipboardData(text: widget.billKey!),
+                                );
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text("Bill Key disalin.")),
+                                );
+                              },
+                              icon: const Icon(Icons.copy, size: 16),
+                              label: const Text("Salin Bill Key"),
+                            ),
+                        ],
                       ),
-                      icon: const Icon(Icons.copy, size: 16),
-                      label: const Text("Salin Link QR"),
+                  ] else ...[
+                    Text(
+                      widget.vaNumber ?? "-",
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 18,
+                        color: Color(0xFFFF3B30),
+                      ),
+                    ),
+                    if ((widget.vaNumber ?? "").isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          await Clipboard.setData(
+                            ClipboardData(text: widget.vaNumber!),
+                          );
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Nomor VA disalin.")),
+                          );
+                        },
+                        icon: const Icon(Icons.copy, size: 16),
+                        label: const Text("Salin Nomor VA"),
+                      ),
+                    ],
+                  ],
+                  if ((widget.vaExpiredAt ?? "").isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      "Berlaku sampai ${widget.vaExpiredAt}",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
                     ),
                   ],
                 ],
               ),
-            )
-          else
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF1F0),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFF6A3D)),
+              ),
+              child: Text(
+                isMandiri
+                    ? "Mandiri Bill Payment hanya berlaku selama batas waktu di atas. Jangan tutup laman ini."
+                    : "Virtual Account hanya berlaku selama batas waktu di atas. Jangan tutup laman ini.",
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xFFFF3B30), fontSize: 11.5),
+              ),
+            ),
+          ] else if (isCash) ...[
             _Card(
               child: Column(
                 children: [
                   const Text(
-                    "QR belum tersedia.",
+                    "Pembayaran Tunai",
                     style: TextStyle(fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    "Buka link pembayaran atau cek kembali setelah beberapa saat.",
+                    "Silakan bayar di tempat saat pesanan diambil atau diantar.",
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.grey.shade600, fontSize: 11.5),
                   ),
-                  if ((widget.paymentUrl ?? "").isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      onPressed: () async {
-                        await Clipboard.setData(
-                          ClipboardData(text: widget.paymentUrl!),
-                        );
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Link pembayaran disalin.")),
-                        );
-                      },
-                      icon: const Icon(Icons.copy, size: 16),
-                      label: const Text("Salin Link Pembayaran"),
-                    ),
-                  ],
                 ],
               ),
             ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF1F0),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFFF6A3D)),
-            ),
-            child: const Text(
-              "Barcode hanya berlaku selama batas waktu yang di atas. Jangan tutup laman ini.",
+          ] else ...[
+            Text(
+              "Scan barcode di bawah ini menggunakan aplikasi Bank/E-Wallet pilihan Anda. Pastikan nama merchant adalah ${widget.merchantName}.",
               textAlign: TextAlign.center,
-              style: TextStyle(color: Color(0xFFFF3B30), fontSize: 11.5),
+              style: TextStyle(color: Colors.grey.shade700, fontSize: 11.5),
             ),
-          ),
+            const SizedBox(height: 12),
+            if (qrData.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF5EC),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFFF6A3D), width: 2),
+                ),
+                child: Column(
+                  children: [
+                    QrImageView(
+                      data: qrData,
+                      size: 200,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "Merchant: ${widget.merchantName}",
+                      style: TextStyle(color: Colors.grey.shade700, fontSize: 11.5),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      "Gunakan aplikasi yang mendukung QRIS\n(Gojek, Dana, Mobile Banking).",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey.shade700, fontSize: 11),
+                    ),
+                    if ((widget.paymentUrl ?? "").isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          await Clipboard.setData(
+                            ClipboardData(text: widget.paymentUrl!),
+                          );
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Link QR disalin.")),
+                          );
+                        },
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFFFF8A00)),
+                          foregroundColor: const Color(0xFFFF8A00),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        icon: const Icon(Icons.copy, size: 16),
+                        label: const Text("Salin Link QR"),
+                      ),
+                    ],
+                  ],
+                ),
+              )
+            else
+              _Card(
+                child: Column(
+                  children: [
+                    const Text(
+                      "QR belum tersedia.",
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      "Buka link pembayaran atau cek kembali setelah beberapa saat.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 11.5),
+                    ),
+                    if ((widget.paymentUrl ?? "").isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          await Clipboard.setData(
+                            ClipboardData(text: widget.paymentUrl!),
+                          );
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Link pembayaran disalin.")),
+                          );
+                        },
+                        icon: const Icon(Icons.copy, size: 16),
+                        label: const Text("Salin Link Pembayaran"),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF1F0),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFF6A3D)),
+              ),
+              child: const Text(
+                "Barcode hanya berlaku selama batas waktu yang di atas. Jangan tutup laman ini.",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Color(0xFFFF3B30), fontSize: 11.5),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -306,6 +460,30 @@ class _Card extends StatelessWidget {
         border: Border.all(color: const Color(0xFFEAEAEA)),
       ),
       child: child,
+    );
+  }
+}
+
+class _ValuePair extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _ValuePair({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 11.5),
+        ),
+        Text(
+          value,
+          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12.5),
+        ),
+      ],
     );
   }
 }

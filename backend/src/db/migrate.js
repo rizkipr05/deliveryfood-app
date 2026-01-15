@@ -119,6 +119,11 @@ const bcrypt = require("bcryptjs");
         payment_token TEXT,
         payment_url TEXT,
         payment_qr TEXT,
+        bank_code TEXT,
+        va_number TEXT,
+        va_expired_at TEXT,
+        biller_code TEXT,
+        bill_key TEXT,
         delivery_method TEXT NOT NULL,
         address TEXT,
         note TEXT,
@@ -138,6 +143,21 @@ const bcrypt = require("bcryptjs");
     }
     if (!hasOrderCol("midtrans_order_id")) {
       await run(db, `ALTER TABLE orders ADD COLUMN midtrans_order_id TEXT`);
+    }
+    if (!hasOrderCol("bank_code")) {
+      await run(db, `ALTER TABLE orders ADD COLUMN bank_code TEXT`);
+    }
+    if (!hasOrderCol("va_number")) {
+      await run(db, `ALTER TABLE orders ADD COLUMN va_number TEXT`);
+    }
+    if (!hasOrderCol("va_expired_at")) {
+      await run(db, `ALTER TABLE orders ADD COLUMN va_expired_at TEXT`);
+    }
+    if (!hasOrderCol("biller_code")) {
+      await run(db, `ALTER TABLE orders ADD COLUMN biller_code TEXT`);
+    }
+    if (!hasOrderCol("bill_key")) {
+      await run(db, `ALTER TABLE orders ADD COLUMN bill_key TEXT`);
     }
 
     await run(

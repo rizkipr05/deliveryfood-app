@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
 import '../../services/checkout_api.dart';
 import 'payment_detail_page.dart';
+import 'payment_success_page.dart';
 
 class CheckoutPage extends StatefulWidget {
   final int productId;
@@ -30,6 +31,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   String deliveryMethod = "pickup";
   String paymentMethod = "qris";
+  String bankCode = "bca";
   int qty = 1;
   bool submitting = false;
 
@@ -58,7 +60,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       case "cash":
         return "Cash";
       case "bank_transfer":
-        return "Bank Transfer";
+        return bankCode == "mandiri" ? "Mandiri Bill" : "VA ${bankCode.toUpperCase()}";
       default:
         return "QRIS";
     }
@@ -79,6 +81,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         qty: qty,
         paymentMethod: paymentMethod,
         deliveryMethod: deliveryMethod,
+        bankCode: paymentMethod == "bank_transfer" ? bankCode : null,
         address: deliveryMethod == "delivery" ? addressC.text.trim() : "",
         note: noteC.text.trim(),
       );
@@ -89,6 +92,26 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final orderTotal = (order["total"] as num?)?.toInt() ?? total;
       final paymentUrl = (order["payment_url"] ?? "").toString();
       final paymentQr = (order["payment_qr"] ?? "").toString();
+      final orderBankCode = (order["bank_code"] ?? "").toString();
+      final orderVaNumber = (order["va_number"] ?? "").toString();
+      final orderVaExpiredAt = (order["va_expired_at"] ?? "").toString();
+      final orderBillerCode = (order["biller_code"] ?? "").toString();
+      final orderBillKey = (order["bill_key"] ?? "").toString();
+
+      if (paymentMethod == "cash") {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PaymentSuccessPage(
+              orderId: orderId,
+              total: orderTotal,
+              method: paymentMethod,
+              deliveryMethod: deliveryMethod,
+            ),
+          ),
+        );
+        return;
+      }
 
       Navigator.pushReplacement(
         context,
@@ -98,6 +121,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
             total: orderTotal,
             paymentUrl: paymentUrl.isEmpty ? null : paymentUrl,
             paymentQr: paymentQr.isEmpty ? null : paymentQr,
+            bankCode: orderBankCode.isEmpty ? null : orderBankCode,
+            vaNumber: orderVaNumber.isEmpty ? null : orderVaNumber,
+            vaExpiredAt: orderVaExpiredAt.isEmpty ? null : orderVaExpiredAt,
+            billerCode: orderBillerCode.isEmpty ? null : orderBillerCode,
+            billKey: orderBillKey.isEmpty ? null : orderBillKey,
             method: paymentMethod,
             merchantName: widget.store ?? "Warung Pak Tri",
             deliveryMethod: deliveryMethod,
@@ -126,13 +154,27 @@ class _CheckoutPageState extends State<CheckoutPage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
+      isScrollControlled: true,
       builder: (ctx) {
         String temp = paymentMethod;
+        String tempBank = bankCode;
         return StatefulBuilder(
           builder: (ctx, setLocal) {
+            final bankOptions = const [
+              {"code": "bca", "label": "BCA"},
+              {"code": "bni", "label": "BNI"},
+              {"code": "bri", "label": "BRI"},
+              {"code": "mandiri", "label": "Mandiri Bill"},
+              {"code": "permata", "label": "Permata"},
+            ];
             return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  12,
+                  16,
+                  16 + MediaQuery.of(ctx).viewInsets.bottom,
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -164,6 +206,30 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       active: temp == "bank_transfer",
                       onTap: () => setLocal(() => temp = "bank_transfer"),
                     ),
+                    if (temp == "bank_transfer") ...[
+                      const SizedBox(height: 2),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          "Pilih Bank VA",
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: bankOptions
+                            .map(
+                              (bank) => _BankChip(
+                                label: bank["label"] ?? "",
+                                active: tempBank == bank["code"],
+                                onTap: () => setLocal(() => tempBank = bank["code"] ?? ""),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
@@ -185,7 +251,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
                             ),
                           ),
                           onPressed: () {
-                            setState(() => paymentMethod = temp);
+                            setState(() {
+                              paymentMethod = temp;
+                              if (temp == "bank_transfer") {
+                                bankCode = tempBank;
+                              }
+                            });
                             Navigator.pop(ctx);
                           },
                           child: const Text(
@@ -450,6 +521,42 @@ class _MethodChip extends StatelessWidget {
             color: active ? const Color(0xFFFF8A00) : Colors.grey.shade600,
             fontWeight: FontWeight.w800,
             fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BankChip extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _BankChip({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: active ? const Color(0xFFFF8A00) : const Color(0xFFEAEAEA)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: active ? const Color(0xFFFF8A00) : Colors.grey.shade600,
+            fontWeight: FontWeight.w800,
+            fontSize: 11.5,
           ),
         ),
       ),

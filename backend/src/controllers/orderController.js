@@ -6,6 +6,7 @@ const checkoutSchema = z.object({
   product_id: z.number().int().positive(),
   qty: z.number().int().positive().default(1),
   payment_method: z.enum(["cash", "qris", "bank_transfer"]).default("qris"),
+  bank_code: z.string().optional(),
   delivery_method: z.enum(["pickup", "delivery"]).default("pickup"),
   address: z.string().optional(),
   note: z.string().optional(),
@@ -16,6 +17,10 @@ async function checkout(req, res) {
   if (!parsed.success) return res.status(400).json({ message: "Invalid payload" });
 
   const { product_id, qty, payment_method, delivery_method, address, note } = parsed.data;
+  const bankCode =
+    payment_method === "bank_transfer"
+      ? (parsed.data.bank_code || "bca").toString().trim() || "bca"
+      : null;
   const db = openDb();
   try {
     const product = await get(
@@ -39,17 +44,23 @@ async function checkout(req, res) {
       INSERT INTO orders (
         user_id,
         payment_method,
+        bank_code,
+        biller_code,
+        bill_key,
         delivery_method,
         address,
         note,
         subtotal,
         delivery_fee,
         total
-      ) VALUES (?,?,?,?,?,?,?,?)
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
       `,
       [
         req.user.id,
         payment_method,
+        bankCode,
+        null,
+        null,
         delivery_method,
         (address || "").trim(),
         (note || "").trim(),
@@ -76,6 +87,7 @@ async function checkout(req, res) {
         userId: req.user.id,
         total,
         paymentMethod: payment_method,
+        bankCode,
         itemName: product.name,
       });
     }
@@ -89,6 +101,11 @@ async function checkout(req, res) {
         payment_url: payment?.payment_url || null,
         payment_token: payment?.payment_token || null,
         payment_qr: payment?.payment_qr || null,
+        bank_code: payment?.bank_code || bankCode || null,
+        va_number: payment?.va_number || null,
+        va_expired_at: payment?.va_expired_at || null,
+        biller_code: payment?.biller_code || null,
+        bill_key: payment?.bill_key || null,
       },
     });
   } catch (e) {

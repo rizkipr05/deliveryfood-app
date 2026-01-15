@@ -27,6 +27,7 @@ class CheckoutApi {
     required int qty,
     required String paymentMethod,
     required String deliveryMethod,
+    String? bankCode,
     String? address,
     String? note,
   }) async {
@@ -42,6 +43,7 @@ class CheckoutApi {
         "qty": qty,
         "payment_method": paymentMethod,
         "delivery_method": deliveryMethod,
+        if (bankCode != null && bankCode.trim().isNotEmpty) "bank_code": bankCode.trim(),
         "address": (address ?? "").trim(),
         "note": (note ?? "").trim(),
       },
